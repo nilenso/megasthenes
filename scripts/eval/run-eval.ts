@@ -212,7 +212,7 @@ async function runEval(inputPath: string): Promise<void> {
 				judge_prompt: judgePromptText,
 			});
 		} finally {
-			session?.close();
+			await session?.close();
 		}
 	}
 
