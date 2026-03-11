@@ -279,16 +279,15 @@ export class Session {
 	 * The session cannot be used after closing.
 	 * Safe to call multiple times.
 	 */
-	close(): void {
+	async close(): Promise<void> {
 		if (this.#closed) return;
 		this.#closed = true;
 
-		// Clean up worktree asynchronously, log if it fails
-		cleanupWorktree(this.repo).then((success) => {
-			if (!success) {
-				this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
-			}
-		});
+		// Clean up worktree, log if it fails
+		const success = await cleanupWorktree(this.repo);
+		if (!success) {
+			this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
+		}
 	}
 
 	async #doAsk(question: string, onProgress?: OnProgress): Promise<AskResult> {
