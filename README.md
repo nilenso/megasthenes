@@ -7,7 +7,7 @@
 
 Ask Forge allows you to programmatically ask questions to a GitHub/GitLab repository.
 
-✨ **Features**
+## Features
 
 - 🔗 **Ask questions about any GitHub/GitLab repository**: Point it at any public or private repository URL and start asking questions in plain language.
 - 📌 **Query any point in history**: Pin your question to a specific branch, tag, or commit
