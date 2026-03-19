@@ -61,6 +61,7 @@ const OUTPUT_COLUMNS = [
 	"judge_model",
 	"ask_system_prompt",
 	"judge_prompt",
+	"reasoning_level",
 ] as const;
 
 // =============================================================================
