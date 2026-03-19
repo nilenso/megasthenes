@@ -329,6 +329,14 @@
     color: var(--indigo-600);
     margin-right: 2px;
   }
+  .reasoning-chip {
+    background: var(--amber-50, #fffbeb);
+    color: var(--amber-700, #b45309);
+    border-color: var(--amber-100, #fef3c7);
+  }
+  .reasoning-chip .model-chip-label {
+    color: var(--amber-600, #d97706);
+  }
 
   /* ─── Summary Stats ─── */
   .stats-bar {
@@ -1138,6 +1146,7 @@ const COLUMN_ALIASES = {
   cache_write_tokens: 'cacheWriteTokens',
   ask_system_prompt: 'askSystemPrompt',
   judge_prompt: 'judgePrompt',
+  reasoning_level: 'reasoningLevel',
 };
 
 function makeEmptyRow() {
@@ -1151,6 +1160,7 @@ function makeEmptyRow() {
     cacheReadTokens: '', cacheWriteTokens: '',
     askModel: '', judgeModel: '',
     askSystemPrompt: '', judgePrompt: '',
+    reasoningLevel: '',
   };
 }
 
@@ -1566,6 +1576,8 @@ function renderModelChips(row) {
   let html = '<div class="model-bar">';
   if (askModel) html += `<span class="model-chip"><span class="model-chip-label">Ask</span>${esc(askModel)}</span>`;
   if (judgeModel) html += `<span class="model-chip"><span class="model-chip-label">Judge</span>${esc(judgeModel)}</span>`;
+  const reasoning = row.reasoningLevel?.trim() || '';
+  if (reasoning) html += `<span class="model-chip reasoning-chip"><span class="model-chip-label">Reasoning</span>${esc(reasoning)}</span>`;
   html += '</div>';
   return html;
 }

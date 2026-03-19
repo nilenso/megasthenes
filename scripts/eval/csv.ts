@@ -28,6 +28,7 @@ export interface EvalRow {
 	judge_model: string;
 	ask_system_prompt: string;
 	judge_prompt: string;
+	reasoning_level: string;
 }
 
 // =============================================================================

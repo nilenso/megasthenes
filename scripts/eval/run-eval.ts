@@ -192,6 +192,7 @@ async function runEval(inputPath: string, reasoning: ThinkingLevel | undefined):
 				judge_model: judgeModelLabel,
 				ask_system_prompt: askSystemPrompt,
 				judge_prompt: judgePromptText,
+				reasoning_level: reasoning ?? "",
 			});
 		} catch (error) {
 			console.error(`  ✗ Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -216,6 +217,7 @@ async function runEval(inputPath: string, reasoning: ThinkingLevel | undefined):
 				judge_model: judgeModelLabel,
 				ask_system_prompt: askSystemPrompt,
 				judge_prompt: judgePromptText,
+				reasoning_level: reasoning ?? "",
 			});
 		} finally {
 			await session?.close();
