@@ -219,6 +219,25 @@ interface CloneRequest {
 	commitish?: string;
 }
 
+/** Translate raw git clone stderr into a user-friendly error message. */
+function friendlyCloneError(stderr: string, url: string): string {
+	const s = stderr.toLowerCase();
+	if (s.includes("could not read username") || s.includes("terminal prompts disabled")) {
+		return `Repository not found or is private: ${url}. Only public repositories are supported.`;
+	}
+	if (s.includes("repository not found") || s.includes("not found")) {
+		return `Repository not found: ${url}. Check that the URL is correct and the repository exists.`;
+	}
+	if (s.includes("could not resolve host")) {
+		return `Could not reach the git host. Check that the URL is correct.`;
+	}
+	if (s.includes("timed out") || s.includes("operation timed out")) {
+		return `Clone timed out for ${url}. The repository may be too large or the server is unreachable.`;
+	}
+	// Fallback: return a trimmed version of stderr
+	return `Clone failed for ${url}: ${stderr.slice(0, 300).trim()}`;
+}
+
 /**
  * Execute the clone/fetch + worktree setup in the background.
  * Updates the job entry in cloneJobs as it progresses.
@@ -252,7 +271,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 			);
 			if (exitCode !== 0) {
 				job.status = "failed";
-				job.error = `git clone failed: ${stderr.slice(0, 500)}`;
+				job.error = friendlyCloneError(stderr, url);
 				job.finishedAt = Date.now();
 				console.error(`[sandbox:clone] clone failed for ${url}: ${stderr.slice(0, 200)}`);
 				return;
