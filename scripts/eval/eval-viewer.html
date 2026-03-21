@@ -966,7 +966,7 @@
 
 <!-- ═══ Upload Screen ═══ -->
 <div class="upload-screen" id="uploadScreen">
-  <button class="btn-icon" id="themeToggleUpload" title="Toggle light/dark mode" style="position:absolute;top:16px;right:20px" onclick="toggleTheme()"></button>
+  <button type="button" class="btn-icon" id="themeToggleUpload" title="Toggle light/dark mode" style="position:absolute;top:16px;right:20px" onclick="toggleTheme()"></button>
   <div class="upload-container">
     <h1 class="upload-title">Eval Viewer</h1>
     <p class="upload-subtitle">Upload one or two eval run CSVs to visualise and compare results.</p>
@@ -986,7 +986,7 @@
     </div>
     <div class="upload-error" id="uploadError"></div>
     <div class="upload-actions">
-      <button class="btn-primary" id="viewBtn" disabled>View Report</button>
+      <button type="button" class="btn-primary" id="viewBtn" disabled>View Report</button>
     </div>
   </div>
 </div>
@@ -998,7 +998,7 @@
       <h2 class="header-title" id="headerTitle">Evaluation Review Workspace</h2>
       <div class="header-subtitle" id="headerSubtitle"></div>
       <div class="header-actions">
-        <button class="btn-icon" id="themeToggleApp" title="Toggle light/dark mode" onclick="toggleTheme()"></button>
+        <button type="button" class="btn-icon" id="themeToggleApp" title="Toggle light/dark mode" onclick="toggleTheme()"></button>
       </div>
     </div>
     <div class="stats-bar" id="statsBar"></div>
@@ -1008,7 +1008,7 @@
     <div class="left-panel">
       <div class="card-list" id="cardList"></div>
     </div>
-    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" onclick="toggleSidebar()">◀</button>
+    <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" onclick="toggleSidebar()">◀</button>
     <div class="right-panel" id="rightPanel">
       <div class="detail-empty">Select a row to view details</div>
     </div>
@@ -1379,7 +1379,7 @@ function parseTokenUsage(row) {
 }
 
 /** Check if a row has any token usage data */
-function hasTokenUsage(row) {
+function _hasTokenUsage(row) {
   const u = parseTokenUsage(row);
   return u.total > 0 || u.input > 0 || u.output > 0;
 }
@@ -1584,12 +1584,12 @@ const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 const _answerStore = {};
 let _answerIdSeq = 0;
 function storeAnswer(text) {
-  const id = 'ans-' + (++_answerIdSeq);
+  const id = `ans-${++_answerIdSeq}`;
   _answerStore[id] = text;
   return id;
 }
 
-function copyAnswerMarkdown(btn, answerId) {
+function _copyAnswerMarkdown(btn, answerId) {
   const text = _answerStore[answerId] || '';
   navigator.clipboard.writeText(text).then(() => {
     btn.innerHTML = CHECK_ICON;
@@ -1604,7 +1604,7 @@ function copyAnswerMarkdown(btn, answerId) {
 // code/preview toggle icon: </> for code view
 const CODE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
 
-function toggleAnswerView(btn, answerId) {
+function _toggleAnswerView(btn, _answerId) {
   const details = btn.closest('details');
   const preview = details.querySelector('.detail-collapsible-md');
   const raw = details.querySelector('.answer-raw-md');
@@ -2654,7 +2654,7 @@ function updateThemeButtons() {
   }
 }
 
-function toggleTheme() {
+function _toggleTheme() {
   const goingDark = !isDark();
   document.documentElement.setAttribute('data-theme', goingDark ? 'dark' : '');
   localStorage.setItem('theme', goingDark ? 'dark' : 'light');
@@ -2668,7 +2668,7 @@ updateThemeButtons();
 // Sidebar Toggle
 // ═══════════════════════════════════════════════════════════════════════════
 
-function toggleSidebar() {
+function _toggleSidebar() {
   const pane = $('splitPane');
   const btn = $('sidebarToggle');
   if (!pane || !btn) return;
