@@ -31,3 +31,7 @@ sandbox-down:
 # View sandbox logs
 sandbox-logs:
     podman-compose logs -f
+
+# Run tracing tests
+tracing-tests:
+    bun test test/tracing.test.ts
