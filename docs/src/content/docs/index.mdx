@@ -15,17 +15,25 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-<CardGrid>
-  <Card title="Local Exploration" icon="magnifier">
-    Clone any git repository and explore it with built-in tools — ripgrep search, file reading, directory listing, and git operations.
-  </Card>
-  <Card title="Sandboxed Execution" icon="laptop">
-    Run all operations inside an isolated container with bubblewrap, seccomp, and namespace isolation. No access to your host filesystem.
-  </Card>
-  <Card title="Observability" icon="star">
-    Every LLM call and tool invocation is traced with OpenTelemetry, following GenAI semantic conventions. Track tokens, latency, and tool usage.
-  </Card>
-  <Card title="Configurable" icon="setting">
-    Bring your own provider and model, customize the system prompt, tune iteration limits, and configure context compaction — all from a single config object.
-  </Card>
-</CardGrid>
+<div class="home-card-grid">
+  <CardGrid>
+    <Card title="Any Repo" icon="external">
+      Ask questions about GitHub or GitLab repositories.
+    </Card>
+    <Card title="Local Clones, Any Revision" icon="cloud-download">
+      Work against a real local clone and inspect any branch, tag, or commit.
+    </Card>
+    <Card title="Read-Only Code Tools" icon="open-book">
+      Explore with ripgrep, file reads, directory listings, and git commands.
+    </Card>
+    <Card title="Sandboxed Execution" icon="laptop">
+      Run exploration in an isolated container for untrusted repos.
+    </Card>
+    <Card title="Observability" icon="bars">
+      Trace LLM calls, tool usage, latency, and tokens with OpenTelemetry.
+    </Card>
+    <Card title="Highly Configurable" icon="setting">
+      Choose provider and model, tune prompts and iteration limits, and control compaction.
+    </Card>
+  </CardGrid>
+</div>
