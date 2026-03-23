@@ -1047,7 +1047,7 @@
  *   inferenceTimeMs: string,
  * }} EvalRow
  *
- * @typedef {{ rows: EvalRow[], name: string, askModel: string, judgeModel: string }} EvalRun
+ * @typedef {{ rows: EvalRow[], name: string, askModel: string, judgeModel: string, reasoningLevel: string }} EvalRun
  *
  * @typedef {{
  *   key: string,
@@ -1201,8 +1201,9 @@ function parseCsv(content, fileName) {
   // so we treat the first row's values as canonical for the whole run.
   const askModel = rows.length > 0 ? (rows[0].askModel || '') : '';
   const judgeModel = rows.length > 0 ? (rows[0].judgeModel || '') : '';
+  const reasoningLevel = rows.length > 0 ? (rows[0].reasoningLevel || '') : '';
 
-  return { ok: true, run: { rows, name: fileName, askModel, judgeModel } };
+  return { ok: true, run: { rows, name: fileName, askModel, judgeModel, reasoningLevel } };
 }
 
 // ─── Row Matching & Comparison ───────────────────────────────────────────

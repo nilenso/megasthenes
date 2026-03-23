@@ -232,28 +232,90 @@ describe("Session", () => {
 			expect(streamCalled).toBe(true);
 		});
 
-		test("passes reasoning level to stream function", async () => {
+		test("adaptive thinking uses stream() with thinkingEnabled", async () => {
 			let capturedOptions: unknown;
+			let streamCalled = false;
+			let streamSimpleCalled = false;
 			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
+				streamCalled = true;
 				capturedOptions = options;
 				return createMockStreamResult();
 			}) as unknown as SessionConfig["stream"];
+			const customStreamSimple = ((_model: unknown, _context: unknown, _options?: unknown) => {
+				streamSimpleCalled = true;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
 
 			const repo = createMockRepo();
 			const session = new Session(
 				repo,
 				createMockConfig({
 					stream: customStream,
-					reasoning: "high",
+					streamSimple: customStreamSimple,
+					thinking: { level: "adaptive" },
 				}),
 			);
 
 			await session.ask("Test");
 
+			expect(streamCalled).toBe(true);
+			expect(streamSimpleCalled).toBe(false);
+			expect(capturedOptions).toEqual({ thinkingEnabled: true });
+		});
+
+		test("level-based thinking uses streamSimple() with reasoning option", async () => {
+			let capturedOptions: unknown;
+			let streamCalled = false;
+			let streamSimpleCalled = false;
+			const customStream = ((_model: unknown, _context: unknown, _options?: unknown) => {
+				streamCalled = true;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
+				streamSimpleCalled = true;
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					stream: customStream,
+					streamSimple: customStreamSimple,
+					thinking: { level: "high" },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(streamCalled).toBe(false);
+			expect(streamSimpleCalled).toBe(true);
 			expect(capturedOptions).toEqual({ reasoning: "high" });
 		});
 
-		test("does not pass stream options when no reasoning configured", async () => {
+		test("level-based thinking passes budgetOverrides as thinkingBudgets", async () => {
+			let capturedOptions: unknown;
+			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					streamSimple: customStreamSimple,
+					thinking: { level: "medium", budgetOverrides: { medium: 8000 } },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(capturedOptions).toEqual({ reasoning: "medium", thinkingBudgets: { medium: 8000 } });
+		});
+
+		test("no thinking config uses stream() with no options", async () => {
 			let capturedOptions: unknown = "sentinel";
 			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
 				capturedOptions = options;
@@ -266,6 +328,25 @@ describe("Session", () => {
 			await session.ask("Test");
 
 			expect(capturedOptions).toBeUndefined();
+		});
+
+		test("extracts responseEffort from patched AssistantMessage", async () => {
+			const mockResult = createMockStreamResult();
+			const originalResult = mockResult.result;
+			mockResult.result = async () => {
+				const msg = await originalResult();
+				// Simulate pi-ai patch: outputConfig stashed on AssistantMessage
+				(msg as Record<string, unknown>).outputConfig = { effort: "medium" };
+				return msg;
+			};
+			const customStream = (() => mockResult) as unknown as SessionConfig["stream"];
+
+			const repo = createMockRepo();
+			const session = new Session(repo, createMockConfig({ stream: customStream }));
+
+			const result = await session.ask("Test");
+
+			expect(result.responseEffort).toBe("medium");
 		});
 	});
 });

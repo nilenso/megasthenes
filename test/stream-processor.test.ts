@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, AssistantMessage, Context, Model } from "@mariozechner/pi-ai";
 import type { ProgressEvent } from "../src/session";
-import { processStream } from "../src/stream-processor";
+import { processStream, type StreamFn } from "../src/stream-processor";
 
 // Mock model and context
 const mockModel = {} as Model<Api>;
@@ -20,7 +20,7 @@ function createMockStreamFn(events: { type: string; [key: string]: unknown }[], 
 			}
 		},
 		result: async () => response,
-	})) as unknown as typeof import("@mariozechner/pi-ai").streamSimple;
+	})) as unknown as StreamFn;
 }
 
 // Helper to create a mock stream function that captures the options it receives
@@ -36,7 +36,7 @@ function createCapturingStreamFn(events: { type: string; [key: string]: unknown 
 			},
 			result: async () => response,
 		};
-	}) as unknown as typeof import("@mariozechner/pi-ai").streamSimple;
+	}) as unknown as StreamFn;
 	return { streamFn, getCapturedOptions: () => capturedOptions };
 }
 
@@ -223,7 +223,7 @@ describe("processStream", () => {
 					},
 				}),
 				result: async () => createMockResponse("Never reached"),
-			})) as unknown as typeof import("@mariozechner/pi-ai").streamSimple;
+			})) as unknown as StreamFn;
 
 			const outcome = await processStream(streamFn, mockModel, mockContext);
 
@@ -291,7 +291,7 @@ describe("processStream", () => {
 			const response = createMockResponse("Hello");
 			const { streamFn, getCapturedOptions } = createCapturingStreamFn(events, response);
 
-			const streamOptions = { reasoning: "high" as const };
+			const streamOptions = { thinkingEnabled: true };
 			const outcome = await processStream(streamFn, mockModel, mockContext, undefined, streamOptions);
 
 			expect(outcome.ok).toBe(true);

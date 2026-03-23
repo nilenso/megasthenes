@@ -1,5 +1,5 @@
-import { getModel, type KnownProvider, type Message, streamSimple, type ThinkingLevel } from "@mariozechner/pi-ai";
-import { type CompactionSettings, MODEL_NAME, MODEL_PROVIDER } from "./config";
+import { getModel, type KnownProvider, type Message, stream, streamSimple } from "@mariozechner/pi-ai";
+import { type CompactionSettings, MODEL_NAME, MODEL_PROVIDER, type ThinkingConfig } from "./config";
 import { type ConnectOptions, connectRepo, type Forge, type ForgeName, type Repo } from "./forge";
 import { consoleLogger, type Logger, nullLogger } from "./logger";
 import { buildDefaultSystemPrompt } from "./prompt";
@@ -32,7 +32,7 @@ export type {
 	Repo,
 	SandboxClientConfig,
 	Session,
-	ThinkingLevel,
+	ThinkingConfig,
 	ToolCallRecord,
 };
 export { buildDefaultSystemPrompt, consoleLogger, nullLogger };
@@ -59,9 +59,8 @@ interface ForgeConfigBase {
 	 * Optional reasoning/thinking level.
 	 * Controls the model's thinking effort across providers (Anthropic, OpenAI, Google, etc.).
 	 * If omitted, thinking is off (default).
-	 * @see ThinkingLevel from pi-ai: "minimal" | "low" | "medium" | "high" | "xhigh"
 	 */
-	reasoning?: ThinkingLevel;
+	thinking?: ThinkingConfig;
 }
 
 /**
@@ -113,7 +112,7 @@ interface ResolvedConfig {
 	maxIterations: number;
 	sandbox?: SandboxClientConfig;
 	compaction?: Partial<CompactionSettings>;
-	reasoning?: ThinkingLevel;
+	thinking?: ThinkingConfig;
 }
 
 export class AskForgeClient {
@@ -137,7 +136,7 @@ export class AskForgeClient {
 			maxIterations: config.maxIterations ?? 20,
 			sandbox: config.sandbox,
 			compaction: config.compaction,
-			reasoning: config.reasoning,
+			thinking: config.thinking,
 		};
 		this.#logger = logger;
 
@@ -189,9 +188,10 @@ export class AskForgeClient {
 				maxIterations: config.maxIterations,
 				executeTool: sandboxExecuteTool,
 				logger: this.#logger,
-				stream: streamSimple,
+				stream,
+				streamSimple,
 				compaction: config.compaction,
-				reasoning: config.reasoning,
+				thinking: config.thinking,
 			});
 		}
 
@@ -207,9 +207,10 @@ export class AskForgeClient {
 			maxIterations: config.maxIterations,
 			executeTool,
 			logger: this.#logger,
-			stream: streamSimple,
+			stream,
+			streamSimple,
 			compaction: config.compaction,
-			reasoning: config.reasoning,
+			thinking: config.thinking,
 		});
 	}
 
