@@ -6,14 +6,16 @@ import {
 	type Message,
 	type Model,
 	stream,
+	streamSimple,
 	type Tool,
 } from "@mariozechner/pi-ai";
 import type { Span } from "@opentelemetry/api";
 import { type CompactionSettings, maybeCompact } from "./compaction";
+import type { ThinkingConfig } from "./config";
 import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { type ParsedLink, validateLinks } from "./response-validation";
-import { processStream } from "./stream-processor";
+import { processStream, type StreamFn } from "./stream-processor";
 import {
 	endAskSpan,
 	endAskSpanWithError,
@@ -57,6 +59,8 @@ export interface AskResult {
 	totalLinks: number;
 	/** Links in the response whose repo-relative paths could not be found on disk */
 	invalidLinks: InvalidLink[];
+	/** The effort level the model actually used (from response output_config). Undefined if thinking is off. */
+	responseEffort?: string;
 }
 
 /** A link in the response that points to a non-existent file path */
@@ -153,6 +157,14 @@ interface AskContext {
 	toolCalls: ToolCallRecord[];
 	usage: Usage;
 	startTime: number;
+	/** Last response effort extracted from output_config (set per-iteration). */
+	responseEffort?: string;
+}
+
+/** Extract the effort level from pi-ai's AssistantMessage (patched to include outputConfig). */
+function extractResponseEffort(response: AssistantMessage): string | undefined {
+	const msg = response as unknown as { outputConfig?: { effort?: string } };
+	return msg.outputConfig?.effort;
 }
 
 function buildResult(
@@ -168,6 +180,7 @@ function buildResult(
 		inferenceTimeMs: Date.now() - ctx.startTime,
 		totalLinks: linkStats.totalLinks,
 		invalidLinks: linkStats.invalidLinks,
+		responseEffort: ctx.responseEffort,
 	};
 }
 
@@ -192,10 +205,14 @@ export interface SessionConfig {
 	executeTool: (name: string, args: Record<string, unknown>, cwd: string) => Promise<string>;
 	/** Logger for debug output (defaults to consoleLogger) */
 	logger?: Logger;
-	/** Stream function for AI inference (defaults to pi-ai's stream) */
-	stream?: typeof stream;
+	/** Raw stream function for AI inference (defaults to pi-ai's stream). Used for adaptive thinking. */
+	stream?: StreamFn;
+	/** Simple stream function (defaults to pi-ai's streamSimple). Used for level-based thinking. */
+	streamSimple?: StreamFn;
 	/** Context compaction settings (defaults to sensible values) */
 	compaction?: Partial<CompactionSettings>;
+	/** Thinking configuration. If omitted, thinking is off. */
+	thinking?: ThinkingConfig;
 }
 
 /**
@@ -223,7 +240,8 @@ export class Session {
 
 	#config: SessionConfig;
 	#logger: Logger;
-	#stream: typeof stream;
+	#stream: StreamFn;
+	#streamSimple: StreamFn;
 	#context: Context;
 	#pending: Promise<AskResult> | null = null;
 	#closed = false;
@@ -234,11 +252,30 @@ export class Session {
 		this.repo = repo;
 		this.#config = config;
 		this.#logger = config.logger ?? consoleLogger;
-		this.#stream = config.stream ?? stream;
+		this.#stream = (config.stream ?? stream) as StreamFn;
+		this.#streamSimple = (config.streamSimple ?? streamSimple) as StreamFn;
 		this.#context = {
 			systemPrompt: config.systemPrompt,
 			messages: [],
 			tools: config.tools,
+		};
+	}
+
+	/** Resolves which stream function and options to use based on thinking config. */
+	#resolveStreamCall(): { streamFn: StreamFn; streamOptions?: Record<string, unknown> } {
+		const thinking = this.#config.thinking;
+		if (!thinking) return { streamFn: this.#stream };
+
+		if (thinking.level === "adaptive") {
+			return { streamFn: this.#stream, streamOptions: { thinkingEnabled: true } };
+		}
+
+		return {
+			streamFn: this.#streamSimple,
+			streamOptions: {
+				reasoning: thinking.level,
+				...(thinking.budgetOverrides && { thinkingBudgets: thinking.budgetOverrides }),
+			},
 		};
 	}
 
@@ -412,7 +449,8 @@ export class Session {
 			messages: [...this.#context.messages],
 		});
 
-		const outcome = await processStream(this.#stream, this.#config.model, this.#context, onProgress);
+		const { streamFn, streamOptions } = this.#resolveStreamCall();
+		const outcome = await processStream(streamFn, this.#config.model, this.#context, onProgress, streamOptions);
 
 		if (!outcome.ok) {
 			endGenerationSpanWithError(genSpan, outcome.error);
@@ -429,6 +467,10 @@ export class Session {
 
 		const response = outcome.response;
 		accumulateUsage(ctx.usage, response);
+
+		// Capture the response effort from the patched output_config (last iteration wins)
+		const effort = extractResponseEffort(response);
+		if (effort) ctx.responseEffort = effort;
 
 		// Check for API error in response (fields may exist but not be in pi-ai's public types)
 		const apiError = response as unknown as { stopReason?: string; errorMessage?: string };

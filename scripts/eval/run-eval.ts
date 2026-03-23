@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
-import { completeSimple, getModel } from "@mariozechner/pi-ai";
-import { MAX_TOOL_ITERATIONS, MODEL_NAME, MODEL_PROVIDER } from "../../src/config";
+import { parseArgs } from "node:util";
+import { completeSimple, getModel, type ThinkingLevel } from "@mariozechner/pi-ai";
+import { MAX_TOOL_ITERATIONS, MODEL_NAME, MODEL_PROVIDER, type ThinkingConfig } from "../../src/config";
 import { AskForgeClient, buildDefaultSystemPrompt, nullLogger } from "../../src/index";
 import { JUDGE_SYSTEM_PROMPT } from "../../src/prompt";
 import { type EvalRow, loadRowsFromCsv, writeCsvString } from "./csv";
@@ -77,7 +78,7 @@ ${answer}`;
 // Main
 // =============================================================================
 
-async function runEval(inputPath: string): Promise<void> {
+async function runEval(inputPath: string, thinking: ThinkingConfig | undefined): Promise<void> {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").replace("Z", "");
 	const reportsDir = new URL("reports/", import.meta.url).pathname;
 	await mkdir(reportsDir, { recursive: true });
@@ -92,13 +93,18 @@ async function runEval(inputPath: string): Promise<void> {
 	}
 
 	console.log(`Reading dataset from: ${inputPath}`);
-	console.log(`Found ${rows.length} rows to evaluate\n`);
+	console.log(`Found ${rows.length} rows to evaluate`);
+	if (thinking) {
+		console.log(`Thinking: ${thinking.level}`);
+	}
+	console.log();
 
 	const client = new AskForgeClient(
 		{
 			provider: MODEL_PROVIDER,
 			model: MODEL_NAME,
 			maxIterations: MAX_TOOL_ITERATIONS,
+			thinking,
 		},
 		nullLogger,
 	);
@@ -186,6 +192,7 @@ async function runEval(inputPath: string): Promise<void> {
 				judge_model: judgeModelLabel,
 				ask_system_prompt: askSystemPrompt,
 				judge_prompt: judgePromptText,
+				reasoning_level: askResult.responseEffort ?? "",
 			});
 		} catch (error) {
 			console.error(`  ✗ Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -210,6 +217,7 @@ async function runEval(inputPath: string): Promise<void> {
 				judge_model: judgeModelLabel,
 				ask_system_prompt: askSystemPrompt,
 				judge_prompt: judgePromptText,
+				reasoning_level: "",
 			});
 		} finally {
 			await session?.close();
@@ -233,10 +241,34 @@ async function runEval(inputPath: string): Promise<void> {
 }
 
 // CLI entry point
-const inputPath = process.argv[2];
+const VALID_LEVELS = new Set<string>(["minimal", "low", "medium", "high", "xhigh", "adaptive"]);
+
+const { values, positionals } = parseArgs({
+	args: Bun.argv,
+	options: {
+		thinking: { type: "string", default: "" },
+	},
+	strict: true,
+	allowPositionals: true,
+});
+
+const inputPath = positionals[2]; // skip bun executable and script path
+
 if (!inputPath) {
-	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv>");
+	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv> [--thinking <level>]");
+	console.error("  --thinking adaptive   model decides effort (Anthropic-only)");
+	console.error("  --thinking <level>    minimal, low, medium, high, xhigh, adaptive");
 	process.exit(1);
 }
 
-await runEval(inputPath);
+let thinking: ThinkingConfig | undefined;
+if (values.thinking) {
+	const level = values.thinking;
+	if (!VALID_LEVELS.has(level)) {
+		console.error(`Invalid level: "${level}". Must be one of: ${[...VALID_LEVELS].join(", ")}`);
+		process.exit(1);
+	}
+	thinking = { level: level as ThinkingLevel | "adaptive" };
+}
+
+await runEval(inputPath, thinking);

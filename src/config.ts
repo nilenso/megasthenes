@@ -4,6 +4,32 @@
  * This file contains all configurable settings for the TypeScript agent.
  */
 
+import type { ThinkingBudgets, ThinkingLevel } from "@mariozechner/pi-ai";
+
+// =============================================================================
+// THINKING CONFIGURATION
+// =============================================================================
+
+/**
+ * Configuration for reasoning/thinking.
+ *
+ * - ThinkingLevel ("minimal"|"low"|"medium"|"high"|"xhigh"): Works across all providers
+ *   via streamSimple(). Each provider translates to its native format.
+ * - "adaptive": Model decides effort per-request (Anthropic-only, uses stream() directly).
+ */
+export interface ThinkingConfig {
+	/**
+	 * Thinking level.
+	 * - ThinkingLevel: Works across all providers via streamSimple().
+	 * - "adaptive": Model decides effort per-request (Anthropic-only, uses stream() directly).
+	 */
+	level: ThinkingLevel | "adaptive";
+	/** Custom token budgets per level (for token-based providers like older Claude, Gemini). */
+	budgetOverrides?: ThinkingBudgets;
+}
+
+export type { ThinkingBudgets, ThinkingLevel };
+
 // =============================================================================
 // MODEL CONFIGURATION
 // =============================================================================
