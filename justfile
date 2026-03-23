@@ -1,3 +1,7 @@
+# Install dependencies
+install:
+    bun install
+
 # Run all tests
 test:
     bun test
