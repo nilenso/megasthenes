@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
+import { parseArgs } from "node:util";
 import { completeSimple, getModel, type ThinkingLevel } from "@mariozechner/pi-ai";
 import { MAX_TOOL_ITERATIONS, MODEL_NAME, MODEL_PROVIDER, type ThinkingConfig } from "../../src/config";
 import { AskForgeClient, buildDefaultSystemPrompt, nullLogger } from "../../src/index";
@@ -241,22 +242,28 @@ async function runEval(inputPath: string, thinking: ThinkingConfig | undefined):
 
 // CLI entry point
 const VALID_LEVELS = new Set<string>(["minimal", "low", "medium", "high", "xhigh", "adaptive"]);
-const args = process.argv.slice(2);
-const thinkingArg = args.find((a) => a.startsWith("--thinking"));
-const positionalArgs = args.filter((a) => !a.startsWith("--"));
-const inputPath = positionalArgs[0];
+
+const { values, positionals } = parseArgs({
+	args: Bun.argv,
+	options: {
+		thinking: { type: "string", default: "" },
+	},
+	strict: true,
+	allowPositionals: true,
+});
+
+const inputPath = positionals[2]; // skip bun executable and script path
 
 if (!inputPath) {
-	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv> [--thinking[=<level>]]");
-	console.error("  --thinking           adaptive (model decides effort, Anthropic-only)");
-	console.error("  --thinking=<level>   minimal, low, medium, high, xhigh, adaptive");
+	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv> [--thinking <level>]");
+	console.error("  --thinking adaptive   model decides effort (Anthropic-only)");
+	console.error("  --thinking <level>    minimal, low, medium, high, xhigh, adaptive");
 	process.exit(1);
 }
 
 let thinking: ThinkingConfig | undefined;
-if (thinkingArg) {
-	const value = thinkingArg.includes("=") ? thinkingArg.split("=")[1] : undefined;
-	const level = value ?? "adaptive";
+if (values.thinking) {
+	const level = values.thinking;
 	if (!VALID_LEVELS.has(level)) {
 		console.error(`Invalid level: "${level}". Must be one of: ${[...VALID_LEVELS].join(", ")}`);
 		process.exit(1);
