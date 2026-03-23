@@ -1,3 +1,7 @@
+# Install dependencies
+install:
+    bun install
+
 # Run all tests
 test:
     bun test
@@ -31,3 +35,4 @@ sandbox-down:
 # View sandbox logs
 sandbox-logs:
     podman-compose logs -f
+

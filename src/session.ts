@@ -8,11 +8,26 @@ import {
 	stream,
 	type Tool,
 } from "@mariozechner/pi-ai";
+import type { Span } from "@opentelemetry/api";
 import { type CompactionSettings, maybeCompact } from "./compaction";
 import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { type ParsedLink, validateLinks } from "./response-validation";
 import { processStream } from "./stream-processor";
+import {
+	endAskSpan,
+	endAskSpanWithError,
+	endCompactionSpan,
+	endCompactionSpanWithError,
+	endGenerationSpan,
+	endGenerationSpanWithError,
+	endToolSpan,
+	endToolSpanWithError,
+	startAskSpan,
+	startCompactionSpan,
+	startGenerationSpan,
+	startToolSpan,
+} from "./tracing";
 
 // =============================================================================
 // Types
@@ -298,11 +313,22 @@ export class Session {
 			startTime: Date.now(),
 		};
 
+		const modelId = `${this.#config.model.provider}/${this.#config.model.id}`;
+		const askSpan = startAskSpan({
+			question,
+			sessionId: this.id,
+			repoUrl: this.repo.url,
+			commitish: this.repo.commitish,
+			model: modelId,
+			systemPrompt: this.#context.systemPrompt,
+		});
+
 		// Check for compaction before adding the new question
 		// Include the new question in the token estimate since it will be added to context
 		const newQuestionMessage: Message = { role: "user", content: question, timestamp: Date.now() };
 		const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
 
+		const compactionSpan = startCompactionSpan(askSpan);
 		try {
 			const compactionResult = await maybeCompact(this.#config.model, messagesWithQuestion, this.#compactionSummary);
 
@@ -311,9 +337,16 @@ export class Session {
 				this.#context.messages = compactionResult.messages;
 				this.#compactionSummary = compactionResult.summary;
 
-				console.log(
-					`[compaction] Context compacted: ${compactionResult.tokensBefore} -> ${compactionResult.tokensAfter} tokens`,
+				this.#logger.log(
+					"[compaction]",
+					`Context compacted: ${compactionResult.tokensBefore} -> ${compactionResult.tokensAfter} tokens`,
 				);
+
+				endCompactionSpan(compactionSpan, {
+					wasCompacted: true,
+					tokensBefore: compactionResult.tokensBefore,
+					tokensAfter: compactionResult.tokensAfter,
+				});
 
 				// Notify via progress callback
 				onProgress?.({
@@ -328,34 +361,61 @@ export class Session {
 			} else {
 				// No compaction needed, just add the question
 				this.#context.messages.push(newQuestionMessage);
+				endCompactionSpan(compactionSpan, { wasCompacted: false });
 			}
 		} catch (compactionError) {
 			// Compaction failed - log error but continue (just add the question)
 			this.#logger.error("[compaction] Error during compaction:", compactionError);
 			this.#context.messages.push(newQuestionMessage);
+			endCompactionSpanWithError(compactionSpan, compactionError);
 		}
 
-		for (let iteration = 0; iteration < this.#config.maxIterations; iteration++) {
-			onProgress?.({ type: "thinking" });
+		try {
+			for (let iteration = 0; iteration < this.#config.maxIterations; iteration++) {
+				onProgress?.({ type: "thinking" });
 
-			const iterationResult = await this.#processIteration(ctx, iteration, onProgress);
+				const iterationResult = await this.#processIteration(ctx, iteration, askSpan, onProgress);
 
-			if (iterationResult.done) {
-				return iterationResult.result;
+				if (iterationResult.done) {
+					const result = iterationResult.result;
+					endAskSpan(askSpan, {
+						toolCallCount: result.toolCalls.length,
+						totalIterations: iteration + 1,
+						totalLinks: result.totalLinks,
+						invalidLinks: result.invalidLinks.length,
+						usage: result.usage,
+					});
+					return result;
+				}
 			}
-		}
 
-		return buildResult(ctx, "[ERROR: Max iterations reached without a final answer.]");
+			const result = buildResult(ctx, "[ERROR: Max iterations reached without a final answer.]");
+			endAskSpanWithError(askSpan, "max_iterations_reached");
+			return result;
+		} catch (error) {
+			endAskSpanWithError(askSpan, "unexpected_error", error instanceof Error ? error : undefined);
+			throw error;
+		}
 	}
 
 	async #processIteration(
 		ctx: AskContext,
 		iteration: number,
+		askSpan: Span,
 		onProgress?: OnProgress,
 	): Promise<{ done: true; result: AskResult } | { done: false }> {
+		const modelId = `${this.#config.model.provider}/${this.#config.model.id}`;
+		const genSpan = startGenerationSpan(askSpan, {
+			iteration: iteration + 1,
+			model: modelId,
+			provider: String(this.#config.model.provider),
+			messages: [...this.#context.messages],
+		});
+
 		const outcome = await processStream(this.#stream, this.#config.model, this.#context, onProgress);
 
 		if (!outcome.ok) {
+			endGenerationSpanWithError(genSpan, outcome.error);
 			this.#logger.error(`API call failed (iteration ${iteration + 1})`, {
 				...(typeof outcome.errorDetails === "object" ? outcome.errorDetails : { error: outcome.errorDetails }),
 				iteration: iteration + 1,
@@ -374,6 +434,7 @@ export class Session {
 		const apiError = response as unknown as { stopReason?: string; errorMessage?: string };
 		if (apiError.stopReason === "error" || apiError.errorMessage) {
 			const errorMsg = apiError.errorMessage || "Unknown API error";
+			endGenerationSpanWithError(genSpan, errorMsg);
 			this.#logger.error("API ERROR", {
 				iteration: iteration + 1,
 				stopReason: apiError.stopReason,
@@ -387,6 +448,15 @@ export class Session {
 			};
 		}
 
+		endGenerationSpan(genSpan, {
+			output: response.content,
+			inputTokens: response.usage?.input ?? 0,
+			outputTokens: response.usage?.output ?? 0,
+			cacheReadTokens: response.usage?.cacheRead ?? 0,
+			cacheCreationTokens: response.usage?.cacheWrite ?? 0,
+			stopReason: (response as unknown as { stopReason?: string }).stopReason,
+		});
+
 		this.#context.messages.push(response);
 
 		// Check if we have a final text response (no tool calls)
@@ -399,7 +469,7 @@ export class Session {
 		}
 
 		// Execute tool calls
-		await this.#executeToolCalls(responseToolCalls, ctx.toolCalls);
+		await this.#executeToolCalls(responseToolCalls, ctx.toolCalls, askSpan);
 
 		return { done: false };
 	}
@@ -431,6 +501,7 @@ export class Session {
 	async #executeToolCalls(
 		toolCalls: { id: string; name: string; arguments: Record<string, unknown> }[],
 		toolCallRecords: ToolCallRecord[],
+		askSpan: Span,
 	): Promise<void> {
 		for (const call of toolCalls) {
 			this.#logger.log(`TOOL: ${call.name}`, JSON.stringify(call.arguments, null, 2));
@@ -439,10 +510,21 @@ export class Session {
 		const toolExecStart = Date.now();
 		const results = await Promise.all(
 			toolCalls.map(async (call) => {
+				const toolSpan = startToolSpan(askSpan, {
+					toolName: call.name,
+					toolCallId: call.id,
+					args: call.arguments,
+				});
 				const t0 = Date.now();
-				const result = await this.#config.executeTool(call.name, call.arguments, this.repo.localPath);
-				this.#logger.log(`TOOL_DONE: ${call.name}`, `${Date.now() - t0}ms`);
-				return result;
+				try {
+					const result = await this.#config.executeTool(call.name, call.arguments, this.repo.localPath);
+					endToolSpan(toolSpan, result);
+					this.#logger.log(`TOOL_DONE: ${call.name}`, `${Date.now() - t0}ms`);
+					return result;
+				} catch (error) {
+					endToolSpanWithError(toolSpan, error);
+					throw error;
+				}
 			}),
 		);
 		this.#logger.log(`ALL_TOOLS_DONE: ${toolCalls.length} calls`, `${Date.now() - toolExecStart}ms`);
