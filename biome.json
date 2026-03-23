@@ -1,7 +1,15 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
 	"files": {
-		"includes": ["**", "!workdir", "!scripts/eval/report-template.html", "!scripts/eval/reports", "!tmp", "!.claude", "!docs"]
+		"includes": [
+			"**",
+			"!workdir",
+			"!scripts/eval/report-template.html",
+			"!scripts/eval/reports",
+			"!tmp",
+			"!.claude",
+			"!docs"
+		]
 	},
 	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"linter": {

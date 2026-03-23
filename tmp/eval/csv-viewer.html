@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSV Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --white: #ffffff;
+    --gray-25: #fcfcfd;
+    --gray-50: #f9fafb;
+    --gray-100: #f2f4f7;
+    --gray-200: #eaecf0;
+    --gray-300: #d0d5dd;
+    --gray-400: #98a2b3;
+    --gray-500: #667085;
+    --gray-600: #475467;
+    --gray-700: #344054;
+    --gray-800: #1d2939;
+    --gray-900: #101828;
+    --indigo-25: #f5f8ff;
+    --indigo-50: #eef4ff;
+    --indigo-100: #e0eaff;
+    --indigo-500: #6172f3;
+    --indigo-600: #444ce7;
+    --indigo-700: #3538cd;
+    --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.1), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+    --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+    --shadow-xl: 0 20px 24px -4px rgba(16, 24, 40, 0.08), 0 8px 8px -4px rgba(16, 24, 40, 0.03);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ─── Upload Screen ─── */
+  .upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 24px;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
+      var(--gray-50);
+  }
+  .upload-area.hidden { display: none; }
+
+  .upload-brand {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .upload-brand h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--gray-900);
+    letter-spacing: -0.5px;
+  }
+  .upload-brand p {
+    font-size: 15px;
+    color: var(--gray-500);
+    margin-top: 6px;
+  }
+
+  .dropzone {
+    border: 1.5px dashed var(--gray-300);
+    border-radius: var(--radius-xl);
+    padding: 40px 56px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--white);
+    max-width: 480px;
+    width: 100%;
+  }
+  .dropzone:hover {
+    border-color: var(--indigo-500);
+    background: var(--indigo-25);
+  }
+  .dropzone.drag-over {
+    border-color: var(--indigo-600);
+    background: var(--indigo-50);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+  }
+
+  .dropzone-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--indigo-50);
+    border: 6px solid var(--indigo-25);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .dropzone-icon svg { width: 20px; height: 20px; color: var(--indigo-600); }
+
+  .dropzone h2 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-700);
+    margin-bottom: 4px;
+  }
+  .dropzone h2 span { color: var(--indigo-600); font-weight: 600; }
+  .dropzone p {
+    color: var(--gray-500);
+    font-size: 13px;
+  }
+
+  input[type="file"] { display: none; }
+
+  /* ─── Header Bar ─── */
+  .header-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+  }
+  .header-bar.visible { display: flex; }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .file-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--indigo-50);
+    color: var(--indigo-700);
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .file-badge svg { width: 14px; height: 14px; }
+
+  .file-info {
+    font-size: 13px;
+    color: var(--gray-500);
+  }
+  .file-info strong {
+    color: var(--gray-700);
+    font-weight: 600;
+  }
+
+  .header-bar .btn {
+    background: var(--white);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-300);
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-xs);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header-bar .btn:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-400);
+  }
+  .header-bar .btn svg { width: 16px; height: 16px; color: var(--gray-500); }
+
+  /* ─── Table ─── */
+  .table-wrapper {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--white);
+  }
+  .table-wrapper.visible { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  col.col-narrow { width: 72px; }
+  col.col-medium { width: 120px; }
+
+  thead { position: sticky; top: 0; z-index: 2; }
+
+  th {
+    background: var(--gray-50);
+    color: var(--gray-500);
+    font-weight: 500;
+    font-size: 12px;
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--gray-200);
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.4;
+  }
+
+  td {
+    padding: 0;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: 13px;
+    color: var(--gray-700);
+  }
+
+  td .cell {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 16px;
+  }
+
+  td .cell-text {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.5;
+  }
+
+  /* Single-line cells: wrap naturally, no expand button */
+
+  /* Multi-line cells: truncate + expand */
+  td.multi-line .cell-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .expand-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-xs);
+    margin-top: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .expand-btn svg { width: 14px; height: 14px; }
+
+  tr:hover td.multi-line .expand-btn { opacity: 1; pointer-events: auto; }
+  .expand-btn:hover {
+    background: var(--indigo-50);
+    border-color: var(--indigo-500);
+    color: var(--indigo-600);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+
+  tbody tr { transition: background 0.1s ease; }
+  tbody tr:hover td { background: var(--gray-25); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .row-num {
+    color: var(--gray-400);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    text-align: right;
+    padding: 10px 14px 10px 0 !important;
+  }
+  th.row-num { padding: 10px 14px 10px 0; }
+
+  /* ─── Popup ─── */
+  .popup-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.55);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.15s ease;
+  }
+  .popup-overlay.visible { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .popup {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    width: min(560px, calc(100vw - 48px));
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-xl);
+    animation: slideUp 0.2s ease;
+  }
+
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .popup-header-text h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-900);
+    letter-spacing: -0.2px;
+  }
+  .popup-header-text .popup-subtitle {
+    font-size: 13px;
+    color: var(--gray-500);
+    margin-top: 2px;
+  }
+
+  .popup-close {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--gray-400);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all 0.15s ease;
+  }
+  .popup-close svg { width: 18px; height: 18px; }
+  .popup-close:hover {
+    background: var(--gray-100);
+    color: var(--gray-600);
+  }
+
+  .popup-body {
+    overflow-y: auto;
+    padding: 20px 24px;
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--gray-700);
+  }
+
+  /* ─── Scrollbar ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gray-300); }
+</style>
+</head>
+<body>
+
+<div class="upload-area" id="uploadArea">
+  <div class="upload-brand">
+    <h1>CSV Viewer</h1>
+    <p>Upload a CSV file to visualize its contents</p>
+  </div>
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"/></svg>
+    </div>
+    <h2><span>Click to upload</span> or drag and drop</h2>
+    <p>CSV, TSV, or TXT files</p>
+  </div>
+  <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+</div>
+
+<div class="header-bar" id="headerBar">
+  <div class="header-left">
+    <div class="file-badge">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <span id="fileName"></span>
+    </div>
+    <span class="file-info" id="fileInfo"></span>
+  </div>
+  <button class="btn" id="resetBtn">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+    Upload another
+  </button>
+</div>
+
+<div class="table-wrapper" id="tableWrapper">
+  <table id="dataTable">
+    <thead id="tableHead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup">
+    <div class="popup-header">
+      <div class="popup-header-text">
+        <h3 id="popupTitle"></h3>
+        <div class="popup-subtitle" id="popupSubtitle"></div>
+      </div>
+      <button class="popup-close" id="popupClose">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="popup-body" id="popupBody"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const EXPAND_SVG = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 3h6m0 0v6m0-6L13 11M9 21H3m0 0v-6m0 6l8-8"/></svg>';
+
+const dropzone = $('dropzone');
+const fileInput = $('fileInput');
+const uploadArea = $('uploadArea');
+const headerBar = $('headerBar');
+const tableWrapper = $('tableWrapper');
+const tableHead = $('tableHead');
+const tableBody = $('tableBody');
+const fileName = $('fileName');
+const fileInfo = $('fileInfo');
+const popupOverlay = $('popupOverlay');
+const popupTitle = $('popupTitle');
+const popupSubtitle = $('popupSubtitle');
+const popupBody = $('popupBody');
+
+let parsedData = { headers: [], rows: [] };
+
+// --- CSV Parser ---
+function parseCSV(text) {
+  const lines = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { lines.push(current); current = ''; }
+      else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        lines.push(current); current = '';
+        if (ch === '\r') i++;
+        lines.push(null);
+      } else { current += ch; }
+    }
+  }
+  if (current || lines.length) lines.push(current);
+
+  const rows = [];
+  let row = [];
+  for (const val of lines) {
+    if (val === null) { if (row.length) rows.push(row); row = []; }
+    else { row.push(val); }
+  }
+  if (row.length) rows.push(row);
+
+  const colCount = rows[0]?.length || 0;
+  const headers = rows[0] || [];
+  const dataRows = rows.slice(1).filter(r => r.some(c => c.trim() !== ''));
+  for (const r of dataRows) {
+    while (r.length < colCount) r.push('');
+  }
+
+  return { headers, rows: dataRows };
+}
+
+// --- Rendering ---
+function classifyColumn(colIndex) {
+  const { rows } = parsedData;
+  let maxLen = 0;
+  for (const row of rows) {
+    const val = row[colIndex] ?? '';
+    if (val.length > maxLen) maxLen = val.length;
+  }
+  if (maxLen <= 6) return 'col-narrow';   // yes/no, IDs like "1","2"
+  if (maxLen <= 20) return 'col-medium';  // short labels
+  return '';                              // flex for the rest
+}
+
+function renderTable() {
+  const { headers, rows } = parsedData;
+
+  // Build colgroup for smart column sizing
+  const table = $('dataTable');
+  const existingColgroup = table.querySelector('colgroup');
+  if (existingColgroup) existingColgroup.remove();
+
+  const colgroup = document.createElement('colgroup');
+  const rowNumCol = document.createElement('col');
+  rowNumCol.style.width = '52px';
+  colgroup.appendChild(rowNumCol);
+
+  for (let c = 0; c < headers.length; c++) {
+    const col = document.createElement('col');
+    const cls = classifyColumn(c);
+    if (cls) col.className = cls;
+    colgroup.appendChild(col);
+  }
+  table.prepend(colgroup);
+
+  let headHTML = '<tr><th class="row-num">#</th>';
+  headers.forEach((h) => {
+    headHTML += `<th title="${esc(h)}">${esc(h)}</th>`;
+  });
+  headHTML += '</tr>';
+  tableHead.innerHTML = headHTML;
+
+  let bodyHTML = '';
+  for (let r = 0; r < rows.length; r++) {
+    bodyHTML += `<tr><td class="row-num">${r + 1}</td>`;
+    for (let c = 0; c < headers.length; c++) {
+      const raw = rows[r]?.[c] ?? '';
+      const val = esc(raw);
+      const isMulti = raw.includes('\n') || raw.length > 120;
+      const cls = isMulti ? 'multi-line' : 'single-line';
+      const expandBtn = isMulti ? `<button class="expand-btn" data-row="${r}" data-col="${c}" title="Expand cell">${EXPAND_SVG}</button>` : '';
+      bodyHTML += `<td class="${cls}"><div class="cell"><span class="cell-text">${val}</span>${expandBtn}</div></td>`;
+    }
+    bodyHTML += '</tr>';
+  }
+  tableBody.innerHTML = bodyHTML;
+
+  tableBody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.expand-btn');
+    if (!btn) return;
+    openCellPopup(+btn.dataset.row, +btn.dataset.col);
+  });
+}
+
+function openCellPopup(rowIndex, colIndex) {
+  const { headers, rows } = parsedData;
+  const colName = headers[colIndex] || `Column ${colIndex + 1}`;
+  popupTitle.textContent = colName;
+  popupSubtitle.textContent = `Row ${rowIndex + 1}`;
+  popupBody.textContent = rows[rowIndex]?.[colIndex] ?? '';
+  popupOverlay.classList.add('visible');
+}
+
+function closePopup() {
+  popupOverlay.classList.remove('visible');
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// --- File handling ---
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    parsedData = parseCSV(e.target.result);
+    fileName.textContent = file.name;
+    fileInfo.innerHTML = `${parsedData.headers.length} columns · ${parsedData.rows.length} rows`;
+    renderTable();
+    uploadArea.classList.add('hidden');
+    headerBar.classList.add('visible');
+    tableWrapper.classList.add('visible');
+  };
+  reader.readAsText(file);
+}
+
+function reset() {
+  uploadArea.classList.remove('hidden');
+  headerBar.classList.remove('visible');
+  tableWrapper.classList.remove('visible');
+  tableHead.innerHTML = '';
+  tableBody.innerHTML = '';
+  fileInput.value = '';
+  parsedData = { headers: [], rows: [] };
+}
+
+// --- Events ---
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+$('resetBtn').addEventListener('click', reset);
+
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+$('popupClose').addEventListener('click', closePopup);
+popupOverlay.addEventListener('click', (e) => { if (e.target === popupOverlay) closePopup(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePopup(); });
+</script>
+</body>
+</html>

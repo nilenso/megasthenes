@@ -33,8 +33,16 @@ export default defineConfig({
 			],
 			sidebar: [
 				{
+					label: "Start Here",
+					autogenerate: { directory: "start-here" },
+				},
+				{
 					label: "Guides",
 					autogenerate: { directory: "guides" },
+				},
+				{
+					label: "Contributing",
+					autogenerate: { directory: "contributing" },
 				},
 				typeDocSidebarGroup,
 			],

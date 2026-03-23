@@ -7,7 +7,7 @@ sidebar:
 
 ask-forge instruments all LLM interactions with [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
 
-## Setup
+### Setup
 
 Install the OpenTelemetry SDK and configure a tracer provider before creating sessions:
 
@@ -25,7 +25,7 @@ provider.register();
 
 Once registered, all `session.ask()` calls automatically emit spans.
 
-## Trace Structure
+### Trace Structure
 
 ```
 ask_forge.session.ask
@@ -36,7 +36,7 @@ ask_forge.session.ask
 └── ...
 ```
 
-## Captured Attributes
+### Captured Attributes
 
 | Attribute | Description |
 |---|---|

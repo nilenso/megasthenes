@@ -1,0 +1,227 @@
+session_id,repository,commit_id,question,is_answer_relevant,is_evidence_supported,is_clear_and_readable,misc_feedback,answer
+379dd988-9f9a-4b22-8283-d2d506d3425a,https://github.com/lukilabs/beautiful-mermaid.git,3fcbb97eac0b76cc4657119c4a0c09dc16e02b59,What benefit does this library provide over simply using mermaid.js directly,yes,no,yes,"- Answer directly addresses the question with clear comparison points
+- Well-organized structure with headers and summary table
+- NO EVIDENCE from codebase provided (no file paths, function names, code snippets)
+- Claims appear to be paraphrased from README but no specific references given
+- Specific claims need verification: '100+ diagrams in under 500ms', '15 built-in themes', 'zero DOM dependencies'
+- 'Powers Craft Agents' claim needs source citation
+- Comparison table helpful but unsupported by code evidence
+- Features like 'ASCII/Unicode output', 'Shiki compatibility', 'two-color foundation' are stated without showing where/how implemented
+- Good narrative flow and readability
+- Would be stronger with: README quotes, package.json references, theme file examples, ASCII renderer code paths","Based on the README and package.json, here are the key benefits `beautiful-mermaid` provides over using mermaid.js directly:
+
+## Key Benefits Over Mermaid.js
+
+### 1. **Better Aesthetics & Professional Output**
+- More polished, professional-looking diagrams out of the box
+- 15 carefully curated built-in themes
+
+### 2. **Simpler, More Powerful Theming System**
+- **Two-color foundation**: Create beautiful diagrams with just `bg` and `fg` colors
+- **CSS custom properties**: Live theme switching without re-rendering
+- **No CSS wrestling**: Mermaid.js requires ""wrestling with CSS classes"" for customization
+- **Shiki compatibility**: Use any VS Code theme directly (hundreds of community themes)
+
+### 3. **ASCII/Terminal Output**
+- **Renders to ASCII/Unicode**: Perfect for CLI tools, terminals, and text-based environments
+- Both Unicode box-drawing (prettier) and pure ASCII (maximum compatibility) modes
+- Mermaid.js has ""no terminal output""
+
+### 4. **Lightweight & Fast**
+- **Zero DOM dependencies**: Pure TypeScript, works everywhere
+- **Ultra-fast**: Renders 100+ diagrams in under 500ms
+- Mermaid.js has ""heavy dependencies"" that pull in a lot of code
+
+### 5. **Built for AI/Developer Workflows**
+- Designed specifically for AI-assisted programming and developer tools
+- Powers [Craft Agents](https://agents.craft.do)
+- Visualize data flows, state machines, and architecture directly in terminals or chat interfaces
+
+### 6. **Dual Output Modes**
+- **SVG**: For rich UIs
+- **ASCII/Unicode**: For terminals and plain text environments
+- Same API for both, making it versatile for different contexts
+
+## Summary Table
+
+| Feature | Mermaid.js | beautiful-mermaid |
+|---------|------------|-------------------|
+| **Aesthetics** | Basic | Professional/polished |
+| **Theming** | Complex CSS classes | 2-color foundation + enrichments |
+| **Live theme switching** | Requires re-render | CSS custom properties |
+| **Terminal output** | ❌ | ✅ (ASCII + Unicode) |
+| **Dependencies** | Heavy | Zero DOM deps |
+| **Performance** | Standard | Ultra-fast (100+ in <500ms) |
+| **VS Code themes** | ❌ | ✅ (via Shiki) |
+
+The library essentially wraps Mermaid's diagram syntax but provides a completely reimagined rendering engine focused on aesthetics, simplicity, and versatility across different environments (web and terminal)."
+379dd988-9f9a-4b22-8283-d2d506d3425a,https://github.com/lukilabs/beautiful-mermaid.git,3fcbb97eac0b76cc4657119c4a0c09dc16e02b59,What benefit does this library provide over simply using mermaid.js directly,yes,no,yes,"- Answer directly addresses the question with clear comparison points
+- Well-organized structure with headers and summary table
+- NO EVIDENCE from codebase provided (no file paths, function names, code snippets)
+- Claims appear to be paraphrased from README but no specific references given
+- Specific claims need verification: '100+ diagrams in under 500ms', '15 built-in themes', 'zero DOM dependencies'
+- 'Powers Craft Agents' claim needs source citation
+- Comparison table helpful but unsupported by code evidence
+- Features like 'ASCII/Unicode output', 'Shiki compatibility', 'two-color foundation' are stated without showing where/how implemented
+- Good narrative flow and readability
+- Would be stronger with: README quotes, package.json references, theme file examples, ASCII renderer code paths","Based on the README and package.json, here are the key benefits `beautiful-mermaid` provides over using mermaid.js directly:
+
+## Key Benefits Over Mermaid.js
+
+### 1. **Better Aesthetics & Professional Output**
+- More polished, professional-looking diagrams out of the box
+- 15 carefully curated built-in themes
+
+### 2. **Simpler, More Powerful Theming System**
+- **Two-color foundation**: Create beautiful diagrams with just `bg` and `fg` colors
+- **CSS custom properties**: Live theme switching without re-rendering
+- **No CSS wrestling**: Mermaid.js requires ""wrestling with CSS classes"" for customization
+- **Shiki compatibility**: Use any VS Code theme directly (hundreds of community themes)
+
+### 3. **ASCII/Terminal Output**
+- **Renders to ASCII/Unicode**: Perfect for CLI tools, terminals, and text-based environments
+- Both Unicode box-drawing (prettier) and pure ASCII (maximum compatibility) modes
+- Mermaid.js has ""no terminal output""
+
+### 4. **Lightweight & Fast**
+- **Zero DOM dependencies**: Pure TypeScript, works everywhere
+- **Ultra-fast**: Renders 100+ diagrams in under 500ms
+- Mermaid.js has ""heavy dependencies"" that pull in a lot of code
+
+### 5. **Built for AI/Developer Workflows**
+- Designed specifically for AI-assisted programming and developer tools
+- Powers [Craft Agents](https://agents.craft.do)
+- Visualize data flows, state machines, and architecture directly in terminals or chat interfaces
+
+### 6. **Dual Output Modes**
+- **SVG**: For rich UIs
+- **ASCII/Unicode**: For terminals and plain text environments
+- Same API for both, making it versatile for different contexts
+
+## Summary Table
+
+| Feature | Mermaid.js | beautiful-mermaid |
+|---------|------------|-------------------|
+| **Aesthetics** | Basic | Professional/polished |
+| **Theming** | Complex CSS classes | 2-color foundation + enrichments |
+| **Live theme switching** | Requires re-render | CSS custom properties |
+| **Terminal output** | ❌ | ✅ (ASCII + Unicode) |
+| **Dependencies** | Heavy | Zero DOM deps |
+| **Performance** | Standard | Ultra-fast (100+ in <500ms) |
+| **VS Code themes** | ❌ | ✅ (via Shiki) |
+
+The library essentially wraps Mermaid's diagram syntax but provides a completely reimagined rendering engine focused on aesthetics, simplicity, and versatility across different environments (web and terminal)."
+d4b8d571-daa9-4461-82ee-ce21ce2cb2ec,https://github.com/lukilabs/beautiful-mermaid.git,3fcbb97eac0b76cc4657119c4a0c09dc16e02b59,how can I use this,yes,no,yes,"- Question is very generic ('how can I use this') making it hard to assess relevance precisely
+- Answer provides comprehensive usage guide covering installation, basic usage, theming, and diagram types
+- No evidence from actual codebase provided (no file paths, no actual function signatures from repo)
+- Claims about function names (renderMermaid, renderMermaidAscii), themes (THEMES object, 15 themes), and features not verified against actual code
+- Package name 'beautiful-mermaid' and API surface area appear fabricated or assumed
+- ASCII output example looks plausible but unsupported by code evidence
+- Browser usage example references unpkg CDN path without verification
+- Live demo URLs provided but not verified to exist
+- Structure and presentation are excellent - clear sections, code examples, progressive complexity
+- Would be strong answer IF backed by actual codebase files/exports
+- For generic 'how to use' question, some leeway on evidence requirement, but library-specific claims need support","# How to Use Beautiful-Mermaid
+
+**Beautiful-Mermaid** is a library for rendering Mermaid diagrams as beautiful SVGs or ASCII art. Here's how to use it:
+
+## Installation
+
+```bash
+npm install beautiful-mermaid
+# or
+bun add beautiful-mermaid
+# or
+pnpm add beautiful-mermaid
+```
+
+## Basic Usage
+
+### 1. **SVG Output** (for web/rich UIs)
+
+```typescript
+import { renderMermaid } from 'beautiful-mermaid'
+
+const svg = await renderMermaid(`
+  graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action]
+    B -->|No| D[End]
+`)
+
+// Now insert the svg string into your DOM or save it
+```
+
+### 2. **ASCII Output** (for terminals/CLI)
+
+```typescript
+import { renderMermaidAscii } from 'beautiful-mermaid'
+
+const ascii = renderMermaidAscii(`graph LR; A --> B --> C`)
+console.log(ascii)
+```
+
+Output:
+```
+┌───┐     ┌───┐     ┌───┐
+│   │     │   │     │   │
+│ A │────►│ B │────►│ C │
+│   │     │   │     │   │
+└───┘     └───┘     └───┘
+```
+
+### 3. **Browser (without a bundler)**
+
+```html
+<script src=""https://unpkg.com/beautiful-mermaid/dist/beautiful-mermaid.browser.global.js""></script>
+<script>
+  const { renderMermaid, THEMES } = beautifulMermaid;
+  renderMermaid('graph TD; A-->B').then(svg => {
+    document.body.innerHTML = svg;
+  });
+</script>
+```
+
+## Theming
+
+### Use Built-in Themes
+
+```typescript
+import { renderMermaid, THEMES } from 'beautiful-mermaid'
+
+const svg = await renderMermaid(diagram, THEMES['tokyo-night'])
+// 15 themes available: zinc-light, zinc-dark, tokyo-night, catppuccin-mocha, nord, dracula, github-dark, etc.
+```
+
+### Custom Colors (Minimal)
+
+```typescript
+const svg = await renderMermaid(diagram, {
+  bg: '#1a1b26',  // Background
+  fg: '#a9b1d6',  // Foreground
+})
+```
+
+### Custom Colors (Rich)
+
+```typescript
+const svg = await renderMermaid(diagram, {
+  bg: '#0f0f0f',
+  fg: '#e0e0e0',
+  accent: '#ff6b6b',  // Arrows, highlights
+  muted: '#666666',   // Labels
+  line: '#3d59a1',    // Edges
+})
+```
+
+## Supported Diagram Types
+
+- **Flowcharts** (`graph TD`, `graph LR`, etc.)
+- **State Diagrams** (`stateDiagram-v2`)
+- **Sequence Diagrams** (`sequenceDiagram`)
+- **Class Diagrams** (`classDiagram`)
+- **ER Diagrams** (`erDiagram`)
+
+## Live Demo
+
+Check out the [live demo and samples](https://agents.craft.do/mermaid) or use it in [Craft Agents](https://agents.craft.do)."

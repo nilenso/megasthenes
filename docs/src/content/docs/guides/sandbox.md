@@ -7,11 +7,11 @@ sidebar:
 
 ask-forge can execute all repository operations inside an isolated sandbox, providing multiple layers of security.
 
-## Architecture
+### Architecture
 
 ![Sandbox architecture diagram](../../../assets/sandbox-architecture.svg)
 
-## Enabling Sandbox Mode
+### Enabling Sandbox Mode
 
 ```ts
 const client = new AskForgeClient({
@@ -29,7 +29,7 @@ When sandbox mode is enabled:
 - All tool execution (file reads, searches, git operations) runs in isolation
 - The host filesystem is never accessed directly
 
-## Security Layers
+### Security Layers
 
 | Layer | Mechanism | Purpose |
 |---|---|---|
@@ -38,7 +38,7 @@ When sandbox mode is enabled:
 | Syscall | seccomp | Restricts allowed system calls |
 | Process | Namespace isolation | Separate PID/network/mount namespaces |
 
-## Running the Sandbox Server
+### Running the Sandbox Server
 
 The sandbox runs as an HTTP server. Start it with:
 
@@ -52,7 +52,7 @@ Or via container:
 podman run -p 8080:8080 ask-forge-sandbox
 ```
 
-## Resetting the Sandbox
+### Resetting the Sandbox
 
 To clean up all cloned repositories:
 

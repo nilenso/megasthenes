@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-## Connect Options
+### Connect Options
 
 The `connect()` method accepts git-related options:
 
@@ -27,7 +27,7 @@ const session = await client.connect("https://gitlab.example.com/owner/repo", {
 });
 ```
 
-## Model and Provider
+### Model and Provider
 
 The `AskForgeClient` accepts a `ForgeConfig` object that controls the AI model and behavior.
 
@@ -55,7 +55,7 @@ const client = new AskForgeClient({
 });
 ```
 
-## System Prompt
+### System Prompt
 
 By default, ask-forge builds a system prompt that includes the repository URL and commit SHA. You can override it to customize the assistant's behavior:
 
@@ -76,7 +76,7 @@ const client = new AskForgeClient({
 });
 ```
 
-## Logging
+### Logging
 
 The second parameter to the constructor controls logging:
 
@@ -102,7 +102,7 @@ const customLogger: Logger = {
 const client = new AskForgeClient(config, customLogger);
 ```
 
-## Sandboxing
+### Sandboxing
 
 For production deployments or untrusted repositories, enable sandbox mode to run all operations in an isolated container:
 
@@ -120,7 +120,7 @@ When enabled, repository cloning and all tool execution (file reads, searches, g
 
 See the [Sandboxed Execution guide](/ask-forge/guides/sandbox/) for security layers, architecture, and how to run the sandbox server.
 
-## Context Compaction
+### Context Compaction
 
 When conversations grow long, ask-forge can automatically summarize older messages to stay within the model's context window. This is enabled by default.
 
@@ -135,7 +135,7 @@ const client = new AskForgeClient({
 });
 ```
 
-## Tracing
+### Tracing
 
 ask-forge emits [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). The library depends only on `@opentelemetry/api` — if no OTel SDK is installed, all tracing is a zero-overhead no-op.
 
@@ -169,7 +169,7 @@ sdk.start();
 
 See the [Observability guide](/ask-forge/guides/observability/) for the full trace structure and captured metrics.
 
-## Streaming Progress
+### Streaming Progress
 
 Use the `onProgress` callback to receive real-time events during inference:
 

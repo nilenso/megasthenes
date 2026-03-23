@@ -1,0 +1,274 @@
+session_id,repository,commit_id,question,is_answer_complete,is_evidence_supported,is_evidence_linked,is_reasoning_sound,misc_feedback,answer,broken_link_ratio,tool_calls,files_read,inference_time_ms
+1,https://github.com/acme/widget-api.git,a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2,What is this repo about?,yes,yes,yes,yes,,"# Widget API
+
+This repository contains a **REST API for managing widgets**, built with Express.js and PostgreSQL.
+
+## Overview
+
+The Widget API provides full CRUD operations for widget resources, along with authentication, rate limiting, and comprehensive test coverage.
+
+## Architecture
+
+The application follows a layered architecture:
+
+- **Entry point** — [`src/server.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/src/server.ts) sets up Express with middleware
+- **Routes** — [`src/routes/widgets.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/src/routes/widgets.ts) defines CRUD endpoints at `/api/v1/widgets`
+- **Database** — [`src/db/connection.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/src/db/connection.ts) manages the PostgreSQL connection pool
+- **Auth** — JWT-based authentication via [`src/middleware/auth.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/src/middleware/auth.ts)
+
+## Quick Start
+
+```bash
+npm install
+npm run dev
+```
+
+The server starts on port 3000 by default (configurable via `PORT` env var).",0/5,"- read: {""path"": ""README.md""}
+- read: {""path"": ""src/server.ts""}
+- read: {""path"": ""src/routes/widgets.ts""}
+- read: {""path"": ""src/db/connection.ts""}
+- read: {""path"": ""src/middleware/auth.ts""}
+- search: {""query"": ""database""}","- README.md
+- server.ts
+- widgets.ts
+- connection.ts
+- auth.ts",15200
+2,https://github.com/acme/widget-api.git,a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2,Explain the authentication flow,yes,yes,yes,yes,,"# Authentication Flow
+
+The API uses JWT-based authentication with the following flow:
+
+1. **Login** — `POST /api/v1/auth/login` accepts email/password, validated in [`src/routes/auth.ts#L15`](https://github.com/acme/widget-api/blob/a1b2c3d/src/routes/auth.ts#L15)
+2. **Password verification** — Passwords are hashed with bcrypt; comparison happens in [`src/services/auth.ts#L22`](https://github.com/acme/widget-api/blob/a1b2c3d/src/services/auth.ts#L22)
+3. **Token issuance** — On success, a JWT is signed using the secret from [`src/config.ts#L12`](https://github.com/acme/widget-api/blob/a1b2c3d/src/config.ts#L12)
+4. **Middleware** — [`src/middleware/auth.ts#L8`](https://github.com/acme/widget-api/blob/a1b2c3d/src/middleware/auth.ts#L8) validates tokens on protected routes by extracting the Bearer token from the `Authorization` header
+5. **Refresh** — Tokens expire after 1 hour; `POST /api/v1/auth/refresh` issues a new token
+6. **Logout** — Token blacklisting via Redis is handled in [`src/services/tokenBlacklist.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/src/services/tokenBlacklist.ts)
+
+```
+Client                    Server
+  │ POST /auth/login        │
+  │ ───────────────────────► │
+  │                          │ verify password (bcrypt)
+  │     ◄─── JWT token ───── │ sign with secret
+  │                          │
+  │ GET /widgets             │
+  │ Authorization: Bearer .. │
+  │ ───────────────────────► │
+  │                          │ authMiddleware validates JWT
+  │     ◄─── 200 OK ──────  │
+```",1/7,"- read: {""path"": ""src/middleware/auth.ts""}
+- read: {""path"": ""src/routes/auth.ts""}
+- read: {""path"": ""src/config.ts""}
+- read: {""path"": ""src/services/auth.ts""}
+- read: {""path"": ""src/services/tokenBlacklist.ts""}","- auth.ts
+- auth.ts
+- config.ts
+- auth.ts
+- tokenBlacklist.ts",24300
+3,https://github.com/acme/widget-api.git,a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2,How are database migrations handled?,yes,yes,yes,yes,,"# Database Migrations
+
+The project uses **Knex.js** for database schema migrations.
+
+## Configuration
+
+The Knex configuration lives in [`knexfile.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/knexfile.ts), which defines connection settings for development, test, and production environments.
+
+## Migration Files
+
+Migrations are stored in [`migrations/`](https://github.com/acme/widget-api/blob/a1b2c3d/migrations/) with timestamp prefixes:
+
+- [`20240101_create_users.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/migrations/20240101_create_users.ts) — Users table
+- [`20240102_create_widgets.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/migrations/20240102_create_widgets.ts) — Widgets table with foreign key to users
+- [`20240201_add_widget_tags.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/migrations/20240201_add_widget_tags.ts) — Tags support
+
+## Commands
+
+```bash
+npm run migrate          # run pending migrations
+npm run migrate:rollback # rollback last batch
+npm run migrate:make     # create new migration file
+```
+
+## Seed Data
+
+Test fixtures are in [`seeds/`](https://github.com/acme/widget-api/blob/a1b2c3d/seeds/) and can be loaded with `npm run seed`.",0/6,"- read: {""path"": ""knexfile.ts""}
+- read: {""path"": ""package.json""}
+- search: {""query"": ""migrate""}
+- read: {""path"": ""migrations/20240101_create_users.ts""}
+- read: {""path"": ""migrations/20240102_create_widgets.ts""}","- knexfile.ts
+- package.json
+- 20240101_create_users.ts
+- 20240102_create_widgets.ts",19800
+4,https://github.com/acme/widget-api.git,a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2,What testing strategy is used?,yes,yes,yes,yes,,"# Testing Strategy
+
+The project uses a multi-layered testing approach:
+
+## Unit Tests
+Unit tests in [`test/unit/`](https://github.com/acme/widget-api/blob/a1b2c3d/test/unit/) cover individual functions and modules using Jest.
+
+## Integration Tests
+Integration tests in [`test/integration/`](https://github.com/acme/widget-api/blob/a1b2c3d/test/integration/) spin up a test database and verify endpoint behavior end-to-end.
+
+## Running Tests
+
+```bash
+npm test              # all tests
+npm run test:unit     # unit only
+npm run test:int      # integration only
+```
+
+Code coverage is enforced at 80% via the Jest config in [`jest.config.ts`](https://github.com/acme/widget-api/blob/a1b2c3d/jest.config.ts).",0/4,"- read: {""path"": ""jest.config.ts""}
+- read: {""path"": ""test/unit/widgets.test.ts""}
+- read: {""path"": ""test/integration/api.test.ts""}
+- read: {""path"": ""package.json""}","- jest.config.ts
+- widgets.test.ts
+- api.test.ts
+- package.json",21800
+5,https://github.com/opencraft/data-pipeline.git,b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3,What is this repo about?,yes,yes,yes,yes,,"# Data Pipeline
+
+This repository contains an **ETL data pipeline** built with Python and Apache Airflow.
+
+## Purpose
+
+The pipeline extracts data from multiple sources (S3, PostgreSQL, REST APIs), applies transformations, and loads results into a Snowflake data warehouse.
+
+## Architecture
+
+```
+Sources (S3, PG, APIs)
+    │
+    ▼
+Connectors (src/connectors/)
+    │
+    ▼
+Transforms (src/transforms/)
+    │
+    ▼
+Warehouse Loader (src/loaders/warehouse.py)
+    │
+    ▼
+Snowflake DW
+```
+
+Key components:
+
+- **Connectors** — [`src/connectors/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/) — Source-specific data extractors extending [`BaseConnector`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/base.py#L5)
+- **Transforms** — [`src/transforms/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/transforms/) — Pure functions operating on DataFrames
+- **Loaders** — [`src/loaders/warehouse.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/loaders/warehouse.py) — Warehouse insertion logic
+- **Orchestration** — [`dags/main_dag.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/dags/main_dag.py) — Airflow DAG definition
+
+## Quick Start
+
+```bash
+pip install -r requirements.txt
+airflow db init
+airflow dags trigger main_pipeline
+```",0/5,"- read: {""path"": ""README.md""}
+- read: {""path"": ""src/connectors/base.py""}
+- read: {""path"": ""src/loaders/warehouse.py""}
+- read: {""path"": ""dags/main_dag.py""}
+- read: {""path"": ""requirements.txt""}","- README.md
+- base.py
+- warehouse.py
+- main_dag.py
+- requirements.txt",18400
+6,https://github.com/opencraft/data-pipeline.git,b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3,How does the ETL process work?,yes,yes,yes,yes,,"# ETL Process
+
+The ETL pipeline operates in three stages, orchestrated by Apache Airflow via the DAG in [`dags/main_dag.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/dags/main_dag.py):
+
+## 1. Extract
+
+Data is pulled from multiple sources using connector classes in [`src/connectors/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/):
+
+- [`S3Connector`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/s3.py) — reads Parquet/CSV from S3 buckets
+- [`PostgresConnector`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/postgres.py) — runs SQL queries against source databases
+- [`ApiConnector`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/api.py) — fetches JSON from REST endpoints
+
+Each connector extends [`BaseConnector`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/base.py#L5) and implements `extract() -> pd.DataFrame`.
+
+## 2. Transform
+
+Transformation rules are defined as pure Python functions in [`src/transforms/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/transforms/). Each transform takes a DataFrame and returns a modified DataFrame:
+
+```python
+def clean_nulls(df: pd.DataFrame) -> pd.DataFrame:
+    return df.dropna(subset=['required_field'])
+```
+
+Transforms are composed in [`src/transforms/pipeline.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/transforms/pipeline.py#L10).
+
+## 3. Load
+
+The [`WarehouseLoader`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/loaders/warehouse.py#L8) class handles bulk insertion into Snowflake using `COPY INTO` statements for performance.",0/9,"- read: {""path"": ""README.md""}
+- read: {""path"": ""src/connectors/__init__.py""}
+- read: {""path"": ""src/connectors/base.py""}
+- read: {""path"": ""src/connectors/s3.py""}
+- read: {""path"": ""src/connectors/postgres.py""}
+- read: {""path"": ""src/transforms/__init__.py""}
+- read: {""path"": ""src/transforms/pipeline.py""}
+- read: {""path"": ""src/loaders/warehouse.py""}
+- read: {""path"": ""dags/main_dag.py""}","- README.md
+- __init__.py
+- base.py
+- s3.py
+- postgres.py
+- __init__.py
+- pipeline.py
+- warehouse.py
+- main_dag.py",38100
+7,https://github.com/opencraft/data-pipeline.git,b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3,How do I add a new data source?,yes,yes,yes,yes,,"# Adding a New Data Source
+
+To add a new data source, follow these steps:
+
+1. **Create a connector** — Add a new class in [`src/connectors/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/) that extends `BaseConnector` ([source](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/connectors/base.py#L5))
+
+2. **Implement `extract()`** — Override the `extract()` method to fetch data from your source:
+   ```python
+   class MySourceConnector(BaseConnector):
+       def extract(self) -> pd.DataFrame:
+           # fetch and return data
+   ```
+
+3. **Register in config** — Add your connector to [`config/sources.yaml`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/config/sources.yaml)
+
+4. **Add transforms** — Create any source-specific transforms in [`src/transforms/`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/transforms/)
+
+5. **Update the DAG** — Add a task for your source in [`dags/main_dag.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/dags/main_dag.py#L22)",0/5,"- read: {""path"": ""src/connectors/base.py""}
+- read: {""path"": ""config/sources.yaml""}
+- read: {""path"": ""dags/main_dag.py""}
+- search: {""query"": ""BaseConnector""}","- base.py
+- sources.yaml
+- main_dag.py",24100
+8,https://github.com/opencraft/data-pipeline.git,b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3,What monitoring is in place?,yes,yes,yes,yes,,"# Monitoring & Alerting
+
+The pipeline has several monitoring layers:
+
+## Airflow UI
+
+The Airflow web UI at `localhost:8080` shows DAG run status, task durations, and failure history. Configuration is in [`airflow.cfg`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/airflow.cfg).
+
+## Health Checks
+
+A lightweight health check endpoint is exposed by [`src/monitoring/health.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/monitoring/health.py) which verifies:
+- Database connectivity
+- S3 bucket access
+- Warehouse connection
+
+## Alerting
+
+Failures trigger Slack notifications via the callback in [`src/monitoring/alerts.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/monitoring/alerts.py#L15):
+
+```python
+on_failure_callback=slack_alert
+```
+
+## Metrics
+
+Pipeline metrics (row counts, durations, error rates) are exported to Prometheus via [`src/monitoring/metrics.py`](https://github.com/opencraft/data-pipeline/blob/b2c3d4e/src/monitoring/metrics.py).",0/4,"- read: {""path"": ""airflow.cfg""}
+- read: {""path"": ""src/monitoring/health.py""}
+- read: {""path"": ""src/monitoring/alerts.py""}
+- read: {""path"": ""src/monitoring/metrics.py""}","- airflow.cfg
+- health.py
+- alerts.py
+- metrics.py",16700
+9,https://github.com/opencraft/data-pipeline.git,b2c3d4e5f6a7b2c3d4e5f6a7b2c3d4e5f6a7b2c3,How is error handling done in the pipeline?,,,,,,,0/0,,,0

@@ -1,0 +1,2342 @@
+session_id,repository,commit_id,question,is_answer_relevant,is_evidence_supported,is_clear_and_readable,misc_feedback,answer
+dd33b3cc-63aa-4f47-9826-9f23f14e3e0c,https://github.com/GNOME/gnumeric.git,e55637660d858ffc2b49f2c1d0be40dfeb9f8f4e,What interesting data structures are in this?,yes,yes,yes,"- Strong evidence: Specific file paths (src/sheet-style.c, src/dependent.h, etc.) for every structure
+- Technical depth: Explains implementation details like pointer tagging, quad-tree types, hash collision handling
+- Well-organized: Clear headers, bullet points, and logical grouping
+- Concrete examples: TILE_SIMPLE/COL/ROW/MATRIX types, 26 expression operators, 624-element state array
+- Appropriately technical: Uses domain-specific terminology (reference counting, copy-on-write, tagged union)
+- Good coverage: 8 distinct structures covering different aspects (spatial indexing, dependency tracking, expressions, RNG, etc.)
+- Context provided: Explains why structures matter (efficiency, memory optimization, large spreadsheets)
+- Minor: Could have included code snippets for extra validation, but file paths are sufficient evidence","Based on my exploration of the Gnumeric codebase, here are the **interesting data structures** I found:
+
+## Interesting Data Structures in Gnumeric
+
+### 1. **CellTile - Adaptive Quad-Tree for Styles** 
+**Location:** `src/sheet-style.c`
+
+This is a sophisticated spatial indexing structure that stores cell styles efficiently:
+
+- **Adaptive tiling system** with 4 types:
+  - `TILE_SIMPLE`: Single style for entire region
+  - `TILE_COL`: Column-oriented tiles (8 columns)
+  - `TILE_ROW`: Row-oriented tiles (16 rows)
+  - `TILE_MATRIX`: Full 8×16 matrix
+  
+- **Pointer tagging trick**: Uses the lowest bit to distinguish between pointers to sub-tiles vs. direct style pointers (exploits memory alignment)
+  
+- **Dynamic splitting**: Tiles automatically split when applying styles to partial regions
+
+- **Optimization logic**: Merges tiles back when possible to save memory
+
+This allows efficient storage of large spreadsheets where most cells share the same style.
+
+### 2. **GnmDepContainer - Dependency Tracking System**
+**Location:** `src/dependent.h`, `src/dependent.c`
+
+A multi-level hash structure for tracking cell dependencies:
+
+- **Dual-linked list**: All dependents in a container
+- **Hash tables for ranges**: Large ranges hashed to accelerate duplicate detection
+- **Single-cell hash**: Maps positions to dependency lists
+- **Memory pools**: Uses `GOMemChunk` for efficient allocation
+- **Dynamic dependency tracking**: Tracks references across sheets/workbooks
+
+### 3. **GnmExpr - Expression Tree**
+**Location:** `src/expr.h`, `src/expr.c`
+
+Sophisticated formula representation:
+
+- **26 different expression operators** (binary, unary, function calls, ranges, etc.)
+- **Reference-counted**: `GnmExprTop` wrapper with hash and refcount
+- **Immutable design**: Expressions are shared when possible via `GnmExprSharer`
+- **Tree walking infrastructure**: Generic visitor pattern support
+- **Relocatable**: Can adjust references when rows/columns are inserted/deleted
+
+### 4. **Mersenne Twister Random Number Generator**
+**Location:** `src/gnm-random.c`
+
+High-quality pseudorandom number generator:
+
+- **624-element state array** (`mt[N]`)
+- **Period of 2^19937-1**
+- Implements multiple distribution functions (normal, gamma, beta, Weibull, Landau, etc.)
+- Fallback to `/dev/urandom` on Unix systems
+
+### 5. **Style Hash with Collision Handling**
+**Location:** `src/sheet-style.c`
+
+Custom multiset implementation:
+
+- Hash table where each bucket contains a **GSList** (to handle hash collisions)
+- Uses `gnm_style_equal` (not pointer equality) for lookups
+- Enables style sharing across the spreadsheet
+- Integrated with sheet lifecycle
+
+### 6. **GnmRange Collections**
+**Location:** `src/ranges.h`, `src/ranges.c`
+
+Utilities for managing rectangular regions:
+
+- Range intersection, union, containment tests
+- **Range fragmentation**: Subtracts one range from another producing fragments
+- **Range simplification**: Merges overlapping/adjacent ranges in arrays
+- Sheet-qualified ranges (`GnmSheetRange`)
+
+### 7. **Value System (GnmValue)**
+**Location:** `src/value.h`, `src/value.c`
+
+Tagged union for cell values:
+
+- Supports: empty, boolean, integer, float, error, string, cellrange, array
+- **Copy-on-write arrays**: Arrays are reference-counted
+- **Error propagation**: Errors carry error type information
+- Interned strings for memory efficiency
+
+### 8. **Collect System**
+**Location:** `src/collect.h`, `src/collect.c`
+
+Sophisticated function argument collector:
+
+- Extracts numeric arrays from heterogeneous cell ranges
+- **Configurable coercion**: Control how strings/bools/blanks are handled via flags
+- Handles subtotal filtering
+- Optional sorting and metadata collection
+- Used by statistical functions
+
+These data structures demonstrate advanced techniques like adaptive spatial indexing, efficient memory management with pools, immutable shared structures, and careful optimization for large-scale spreadsheet operations."
+fb3e76c1-8abb-4dbd-984d-821ca0b83059,https://github.com/badlogic/pi-mono.git,0091857f8b2e908bd6e269b1fbd4ce2e93a2f794,what do you think of pi-mono?,yes,yes,yes,"- Answer directly addresses the subjective question with a structured assessment
+- Strong evidence: cites specific package names, file names (AGENTS.md, CHANGELOGs), version requirements (Node.js >=20.0.0), and architectural details
+- Evidence is comprehensive: covers multiple aspects (architecture, packages, tooling, documentation, community)
+- Good structure: clear sections with headers make it skimmable
+- Balanced: mentions both strengths and observations without being overly promotional
+- ""Notable Design Decisions"" section shows deep understanding of codebase philosophy
+- Minor point: the ""shittycodingagent.ai"" observation adds personality but is appropriately labeled as branding commentary
+- Overall: thorough, well-supported answer that goes beyond surface-level observations","Based on my exploration of this codebase, here's my assessment of **pi-mono**:
+
+## Overview
+
+**pi-mono** is a well-structured monorepo for building AI agents and managing LLM deployments. It's particularly centered around the **pi coding agent** - an interactive CLI tool for AI-assisted development.
+
+## Strengths
+
+### 1. **Excellent Architecture**
+- **Clean separation of concerns**: Each package has a focused purpose (AI providers, agent runtime, TUI library, web UI, etc.)
+- **Lockstep versioning**: All packages share the same version, simplifying dependency management
+- **Strong TypeScript discipline**: Strict typing rules (no `any` types, no inline imports)
+
+### 2. **Comprehensive Tooling**
+The monorepo includes 7 distinct packages:
+- `@mariozechner/pi-ai` - Unified multi-provider LLM API
+- `@mariozechner/pi-agent-core` - Agent runtime with tool calling
+- `@mariozechner/pi-coding-agent` - The main interactive coding agent
+- `@mariozechner/pi-tui` - Terminal UI library with differential rendering
+- `@mariozechner/pi-web-ui` - Web components for chat interfaces
+- `@mariozechner/pi-mom` - Slack bot integration
+- `@mariozechner/pi-pods` - vLLM deployment management
+
+### 3. **Outstanding Documentation**
+- Detailed `AGENTS.md` with specific rules for AI agents working on the codebase
+- Clear contributing guidelines
+- Package-specific CHANGELOGs with proper attribution
+- Comprehensive guides for adding new LLM providers
+
+### 4. **Developer Experience**
+- Well-defined development workflow
+- Proper testing setup with `test.sh` and `pi-test.sh`
+- Automated release scripts with CHANGELOG management
+- Husky pre-commit hooks for code quality
+
+### 5. **Community-Focused**
+- Active external contributions (evidenced by numerous PR attributions in CHANGELOGs)
+- Discord community
+- Clear contribution guidelines
+- MIT licensed
+
+## Notable Design Decisions
+
+1. **No major releases**: Uses `minor` for breaking changes and `patch` for features/fixes
+2. **Git safety for parallel agents**: Explicit rules to prevent conflicts when multiple AI agents work simultaneously
+3. **Standardized event streaming**: All LLM providers emit standardized events (`text`, `tool_call`, `thinking`, `usage`, `stop`)
+4. **Configurable keybindings**: All keyboard shortcuts are configurable, never hardcoded
+
+## Minor Observations
+
+- Uses modern tooling (Biome for linting, tsgo/TypeScript native preview)
+- Requires Node.js >=20.0.0
+- Active development (recent contributions visible in CHANGELOGs)
+- The main product appears to be at https://shittycodingagent.ai (interesting branding choice!)
+
+## Overall Assessment
+
+This is a **professional, well-maintained monorepo** with clear architectural vision, strong development practices, and thoughtful documentation. The rules in `AGENTS.md` suggest the developers have practical experience with AI-assisted development and have encoded best practices directly into their workflow.
+
+The focus on parallel agent collaboration (git rules, explicit file tracking) is particularly forward-thinking for the AI era."
+fb3e76c1-8abb-4dbd-984d-821ca0b83059,https://github.com/badlogic/pi-mono.git,0091857f8b2e908bd6e269b1fbd4ce2e93a2f794,what do you think of pi-mono?,yes,yes,yes,"- Answer directly addresses the subjective question with a structured assessment
+- Strong evidence: cites specific package names, file names (AGENTS.md, CHANGELOGs), version requirements (Node.js >=20.0.0), and architectural details
+- Evidence is comprehensive: covers multiple aspects (architecture, packages, tooling, documentation, community)
+- Good structure: clear sections with headers make it skimmable
+- Balanced: mentions both strengths and observations without being overly promotional
+- ""Notable Design Decisions"" section shows deep understanding of codebase philosophy
+- Minor point: the ""shittycodingagent.ai"" observation adds personality but is appropriately labeled as branding commentary
+- Overall: thorough, well-supported answer that goes beyond surface-level observations","Based on my exploration of this codebase, here's my assessment of **pi-mono**:
+
+## Overview
+
+**pi-mono** is a well-structured monorepo for building AI agents and managing LLM deployments. It's particularly centered around the **pi coding agent** - an interactive CLI tool for AI-assisted development.
+
+## Strengths
+
+### 1. **Excellent Architecture**
+- **Clean separation of concerns**: Each package has a focused purpose (AI providers, agent runtime, TUI library, web UI, etc.)
+- **Lockstep versioning**: All packages share the same version, simplifying dependency management
+- **Strong TypeScript discipline**: Strict typing rules (no `any` types, no inline imports)
+
+### 2. **Comprehensive Tooling**
+The monorepo includes 7 distinct packages:
+- `@mariozechner/pi-ai` - Unified multi-provider LLM API
+- `@mariozechner/pi-agent-core` - Agent runtime with tool calling
+- `@mariozechner/pi-coding-agent` - The main interactive coding agent
+- `@mariozechner/pi-tui` - Terminal UI library with differential rendering
+- `@mariozechner/pi-web-ui` - Web components for chat interfaces
+- `@mariozechner/pi-mom` - Slack bot integration
+- `@mariozechner/pi-pods` - vLLM deployment management
+
+### 3. **Outstanding Documentation**
+- Detailed `AGENTS.md` with specific rules for AI agents working on the codebase
+- Clear contributing guidelines
+- Package-specific CHANGELOGs with proper attribution
+- Comprehensive guides for adding new LLM providers
+
+### 4. **Developer Experience**
+- Well-defined development workflow
+- Proper testing setup with `test.sh` and `pi-test.sh`
+- Automated release scripts with CHANGELOG management
+- Husky pre-commit hooks for code quality
+
+### 5. **Community-Focused**
+- Active external contributions (evidenced by numerous PR attributions in CHANGELOGs)
+- Discord community
+- Clear contribution guidelines
+- MIT licensed
+
+## Notable Design Decisions
+
+1. **No major releases**: Uses `minor` for breaking changes and `patch` for features/fixes
+2. **Git safety for parallel agents**: Explicit rules to prevent conflicts when multiple AI agents work simultaneously
+3. **Standardized event streaming**: All LLM providers emit standardized events (`text`, `tool_call`, `thinking`, `usage`, `stop`)
+4. **Configurable keybindings**: All keyboard shortcuts are configurable, never hardcoded
+
+## Minor Observations
+
+- Uses modern tooling (Biome for linting, tsgo/TypeScript native preview)
+- Requires Node.js >=20.0.0
+- Active development (recent contributions visible in CHANGELOGs)
+- The main product appears to be at https://shittycodingagent.ai (interesting branding choice!)
+
+## Overall Assessment
+
+This is a **professional, well-maintained monorepo** with clear architectural vision, strong development practices, and thoughtful documentation. The rules in `AGENTS.md` suggest the developers have practical experience with AI-assisted development and have encoded best practices directly into their workflow.
+
+The focus on parallel agent collaboration (git rules, explicit file tracking) is particularly forward-thinking for the AI era."
+72617027-fb39-4615-aed6-7f85c085cf7f,https://github.com/badlogic/pi-mono.git,b170341b14efa46b5a7164ca6c5aab3028bade32,How does one refresh the list of models shown by pi coding agent cli,yes,yes,yes,"- Answer directly addresses the question with multiple practical methods
+- Strong evidence: specific file paths, line numbers, and actual code snippets from the codebase
+- Documentation quote from models.md reinforces the answer
+- Clear structure with headers and sections
+- Provides both in-session method (/model command) and CLI flag alternative (--list-models)
+- Explicit code snippet shows the refresh() call mechanism
+- Summary section effectively recaps the key point
+- No apparent inaccuracies or unsupported claims","Based on my analysis of the codebase, here's how to refresh the list of models in the pi coding agent CLI:
+
+## How to Refresh the Model List
+
+The model list is **automatically refreshed** every time you open the model selector. Specifically:
+
+### During a Session
+
+**Type `/model`** - This opens the model selector UI, which:
+1. Calls `modelRegistry.refresh()` to reload `~/.pi/agent/models.json` 
+2. Fetches all available models with valid API keys
+3. Displays the updated list
+
+**Evidence:** From `packages/coding-agent/src/modes/interactive/components/model-selector.ts` (lines 129-133):
+```typescript
+private async loadModels(): Promise<void> {
+    // Refresh to pick up any changes to models.json
+    this.modelRegistry.refresh();
+    // ... loads models
+}
+```
+
+### No Manual Refresh Command Needed
+
+According to the documentation in `packages/coding-agent/docs/models.md` (line 64):
+> ""The file reloads each time you open `/model`. Edit during session; no restart needed.""
+
+### Alternative: Via CLI Flag
+
+You can also list models from the command line without starting a session:
+
+```bash
+pi --list-models [search]
+```
+
+This will:
+- Load models fresh from the registry
+- Optionally filter by search pattern
+- Display provider, model ID, context window, etc.
+
+**Summary:** The model list refreshes automatically whenever you open `/model` in the interactive mode. Just edit your `~/.pi/agent/models.json` file and use `/model` to see the changes immediately—no restart required."
+3dd50665-4d7e-4e61-8c06-939f8ba7549f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,What is this repo about?,yes,yes,yes,"- Answer correctly identifies the repo as an EcoFlow to Prometheus exporter
+- Key features accurately described: MQTT data collection, Prometheus integration, Docker support
+- Specific technical details provided: port 9090, mqtt.ecoflow.com, api.ecoflow.com
+- Supported device models listed (RIVER/DELTA series)
+- Metrics categories well-organized and specific (BMS, inverter, MPPT, etc.)
+- File references support claims: ecoflow_exporter.py mentioned
+- Snake_case conversion detail shows understanding of implementation
+- Logical structure: summary → features → components → devices → metrics
+- No hallucinations or unsupported claims detected
+- Appropriately detailed without being overwhelming","## Repository Summary
+
+This repository is an **EcoFlow to Prometheus Exporter** - a monitoring tool for EcoFlow portable power stations and solar generators.
+
+### Key Features:
+
+1. **MQTT-based Data Collection**: 
+   - Connects to EcoFlow's MQTT broker (`mqtt.ecoflow.com`) to receive real-time device telemetry
+   - Works the same way as the official EcoFlow mobile app
+   - No need to request API keys - credentials are extracted from `api.ecoflow.com`
+
+2. **Prometheus Integration**:
+   - Exposes device metrics in Prometheus format on port 9090
+   - Auto-generates metrics from MQTT payload (e.g., battery status, temperature, voltage, power consumption)
+   - Supports multiple devices with device labels
+
+3. **Components Provided**:
+   - Python exporter program (`ecoflow_exporter.py`)
+   - Docker image for easy deployment
+   - Grafana dashboard template
+   - Docker Compose quick-start guide
+
+4. **Supported Devices** (tested):
+   - RIVER Max, RIVER 2, RIVER 2 Max
+   - DELTA Max, DELTA 2, DELTA 2 Max, DELTA Pro
+
+5. **Metrics Collected**:
+   - Battery management system (BMS) data: temperature, voltage, charge cycles, SOC/SOH
+   - Inverter data: AC/DC input/output voltage and current
+   - MPPT solar controller data
+   - Power distribution data: USB ports, car charger output, etc.
+   - Device status: online/offline, WiFi signal strength
+
+The exporter dynamically generates Prometheus metrics from the JSON payloads received via MQTT, prefixing them with `ecoflow_` and converting keys to snake_case format."
+cba5a136-c5c1-476c-938d-6ee13b10278f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,yes,yes,yes,"- Answer appropriately addresses a generic greeting
+- No codebase-specific claims made, so evidence requirement is N/A
+- Lists relevant capabilities clearly
+- Invites user engagement with open-ended question
+- Professional and helpful tone
+- Well-structured with bullet points for readability","Hello! I'm a code analysis assistant. I can help you explore and understand the codebase in this repository.
+
+I can help you with tasks like:
+- Finding files and searching for code patterns
+- Reading and explaining code
+- Analyzing code structure and dependencies
+- Answering questions about how the code works
+
+What would you like to know about this codebase?"
+cba5a136-c5c1-476c-938d-6ee13b10278f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,yes,yes,yes,"- Answer appropriately addresses a generic greeting
+- No codebase-specific claims made, so evidence requirement is N/A
+- Lists relevant capabilities clearly
+- Invites user engagement with open-ended question
+- Professional and helpful tone
+- Well-structured with bullet points for readability","Hello! I'm a code analysis assistant. I can help you explore and understand the codebase in this repository.
+
+I can help you with tasks like:
+- Finding files and searching for code patterns
+- Reading and explaining code
+- Analyzing code structure and dependencies
+- Answering questions about how the code works
+
+What would you like to know about this codebase?"
+cba5a136-c5c1-476c-938d-6ee13b10278f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,yes,yes,yes,"- Answer appropriately addresses a generic greeting
+- No codebase-specific claims made, so evidence requirement is N/A
+- Lists relevant capabilities clearly
+- Invites user engagement with open-ended question
+- Professional and helpful tone
+- Well-structured with bullet points for readability","Hello! I'm a code analysis assistant. I can help you explore and understand the codebase in this repository.
+
+I can help you with tasks like:
+- Finding files and searching for code patterns
+- Reading and explaining code
+- Analyzing code structure and dependencies
+- Answering questions about how the code works
+
+What would you like to know about this codebase?"
+cba5a136-c5c1-476c-938d-6ee13b10278f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,yes,yes,yes,"- Answer appropriately addresses a generic greeting
+- No codebase-specific claims made, so evidence requirement is N/A
+- Lists relevant capabilities clearly
+- Invites user engagement with open-ended question
+- Professional and helpful tone
+- Well-structured with bullet points for readability","Hello! I'm a code analysis assistant. I can help you explore and understand the codebase in this repository.
+
+I can help you with tasks like:
+- Finding files and searching for code patterns
+- Reading and explaining code
+- Analyzing code structure and dependencies
+- Answering questions about how the code works
+
+What would you like to know about this codebase?"
+cba5a136-c5c1-476c-938d-6ee13b10278f,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,yes,yes,yes,"- Answer appropriately addresses a generic greeting
+- No codebase-specific claims made, so evidence requirement is N/A
+- Lists relevant capabilities clearly
+- Invites user engagement with open-ended question
+- Professional and helpful tone
+- Well-structured with bullet points for readability","Hello! I'm a code analysis assistant. I can help you explore and understand the codebase in this repository.
+
+I can help you with tasks like:
+- Finding files and searching for code patterns
+- Reading and explaining code
+- Analyzing code structure and dependencies
+- Answering questions about how the code works
+
+What would you like to know about this codebase?"
+70051ef9-40ba-483a-a76f-69479115e373,https://github.com/charmbracelet/crush.git,3bda767c6700db1ead64af01471b3e7b868a569f,how does this work?,no,no,yes,"- Question 'how does this work?' is too vague without context (no code snippet, file path, or specific component mentioned)
+- Answer assumes question refers to entire Crush project/architecture
+- This is likely an overly broad interpretation — user may have meant a specific function, file, or feature
+- Answer provides comprehensive architectural overview with clear organization
+- Cites specific files (main.go, root.go, app.go) and patterns (Bubble Tea, Fantasy, MCP)
+- Flow diagrams and directory structure enhance readability
+- Well-structured with headings, bullet points, code blocks
+- Evidence appears plausible but cannot verify accuracy without codebase access
+- If question truly meant 'how does Crush work overall?', answer would be relevant
+- More likely: user forgot to provide context or selected code, making question unanswerable as stated
+- Proper response should have asked for clarification about what specifically 'this' refers to","Based on my exploration of the codebase, I can now explain how Crush works:
+
+---
+
+# How Crush Works
+
+## Overview
+**Crush** is a terminal-based AI coding assistant that connects your development environment (code, tools, workflows) to various Large Language Models (LLMs). It's built in Go and uses the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework for its terminal UI.
+
+## Architecture
+
+### Core Components
+
+1. **Main Entry Point** (`main.go`)
+   - Starts the application
+   - Optionally enables profiling via `CRUSH_PROFILE`
+   - Delegates to the command layer
+
+2. **Command Layer** (`internal/cmd/`)
+   - **root.go**: Main command handling, sets up the app and TUI
+   - Provides subcommands: `run`, `logs`, `stats`, `projects`, `update-providers`, etc.
+   - Handles configuration initialization and cleanup
+
+3. **Application Layer** (`internal/app/app.go`)
+   - **Central coordinator** that wires together all services:
+     - Sessions (conversation management)
+     - Messages (chat history)
+     - History (file tracking)
+     - Permissions (tool approval)
+     - LSP clients (language server integration)
+   - Manages agent lifecycle
+   - Publishes events to the TUI via pub/sub pattern
+
+4. **Agent Layer** (`internal/agent/`)
+   - **Core AI orchestration** using the Fantasy library (LLM abstraction)
+   - **SessionAgent**: Manages conversations with LLMs
+     - Handles message queuing
+     - Auto-summarization when context gets too long
+     - Tool execution
+     - Token/cost tracking
+   - **Coordinator**: Routes requests to appropriate agents
+
+5. **TUI Layer** (`internal/tui/` and `internal/ui/`)
+   - Built with Bubble Tea (Elm-architecture pattern)
+   - Renders chat interface
+   - Handles user input
+   - Shows tool execution, permissions, etc.
+
+## How It Works: Step-by-Step
+
+### 1. **Initialization**
+```
+User runs `crush` → root.go setupApp() → 
+  - Loads config from .crush.json or ~/.config/crush/crush.json
+  - Connects to SQLite database (.crush/crush.db)
+  - Initializes LSP clients for code context
+  - Initializes MCP servers (Model Context Protocol)
+  - Creates agent coordinator
+  - Starts TUI
+```
+
+### 2. **Configuration**
+- **Providers**: Supports multiple LLM providers (OpenAI, Anthropic, Google, Bedrock, etc.)
+- **Auto-updates**: Fetches latest provider/model info from [Catwalk](https://github.com/charmbracelet/catwalk)
+- **LSPs**: Integrates language servers (gopls, typescript-language-server, etc.) for code understanding
+- **MCPs**: Extends capabilities via Model Context Protocol servers (stdio, HTTP, SSE)
+
+### 3. **Chat Flow**
+```
+User types prompt → 
+  SessionAgent.Run() → 
+    - Creates user message in DB
+    - Prepares conversation history
+    - Adds LSP/MCP context
+    - Streams to LLM via Fantasy library →
+      - Handles tool calls (bash, edit, grep, etc.)
+      - Requests permissions when needed
+      - Updates UI in real-time
+      - Saves assistant responses to DB
+```
+
+### 4. **Tool Execution**
+The agent has built-in tools (`internal/agent/tools/`):
+- **bash**: Execute shell commands
+- **edit**: Modify files
+- **grep**: Search codebases
+- **view**: Read files
+- **mcp_***: Tools from MCP servers
+
+Permission flow:
+```
+Tool requested → 
+  Permission service checks if allowed →
+    - If auto-approved: execute
+    - If not: prompt user in TUI →
+      User approves/denies → execute or cancel
+```
+
+### 5. **Context Management**
+- **Auto-summarization**: When approaching token limits, generates summary and restarts with condensed context
+- **LSP integration**: Uses language servers to provide hover info, definitions, diagnostics
+- **File tracking**: Monitors which files are relevant to conversation
+- **Caching**: Uses Anthropic's prompt caching to reduce costs
+
+### 6. **Sessions**
+- Each project can have multiple sessions
+- Sessions stored in SQLite with:
+  - Message history
+  - Token usage
+  - Cost tracking
+  - Todo lists
+- Can switch models mid-session while preserving context
+
+### 7. **Non-Interactive Mode**
+```bash
+crush run ""explain this code""
+```
+- Skips TUI
+- Streams output to stdout
+- Auto-approves all permissions
+- Useful for scripting/CI/CD
+
+## Key Technologies
+
+- **Language**: Go
+- **TUI Framework**: Bubble Tea (Elm architecture)
+- **LLM Abstraction**: Fantasy library
+- **Database**: SQLite (via sqlc for type-safe queries)
+- **LSP**: Language Server Protocol integration
+- **MCP**: Model Context Protocol for extensions
+
+## Data Storage
+
+```
+.crush/
+├── crush.db           # SQLite database (sessions, messages, history)
+├── logs/
+│   └── crush.log      # Application logs
+└── .gitignore         # Auto-generated to ignore all .crush/ contents
+```
+
+## Configuration Priority
+1. `.crush.json` (project-local)
+2. `crush.json` (project root)
+3. `~/.config/crush/crush.json` (global)
+
+State data: `~/.local/share/crush/` (Unix) or `%LOCALAPPDATA%\crush\` (Windows)
+
+---
+
+**In summary**: Crush is a sophisticated terminal-based AI pair programmer that combines LLM providers, code context from LSPs, extensibility via MCPs, and a polished TUI to provide an integrated development experience—all while respecting your tools, workflows, and privacy."
+67178663-a3f9-4123-b49b-d48883e04aa5,https://github.com/charmbracelet/glow.git,752de97c5a331af0eed0c7b417462621bffa533e,can I use this tool to render any markdown output from the pi coding agent?,yes,yes,yes,"- Directly answers the core question in the opening sentence
+- Provides multiple relevant usage examples (stdin, file, URL, GitHub)
+- Cites specific code evidence (line 232-239 in main.go for stdin detection)
+- Includes practical examples tailored to the 'pi coding agent' scenario
+- Well-structured with clear headings and sections
+- Code blocks are properly formatted and demonstrate different use cases
+- Lists relevant features (auto-detection, styling, word wrapping, pager, syntax highlighting)
+- Concrete examples show both piped and file-based workflows
+- Could have included more specific file paths or function names for the features listed
+- Overall very actionable and comprehensive response","Based on my analysis of the codebase, **yes, you can use Glow to render markdown output from any source**, including a pi coding agent. Here's what you need to know:
+
+## How to Use Glow for Markdown Rendering
+
+Glow accepts markdown input in several ways:
+
+### 1. **From stdin** (pipe input directly)
+```bash
+echo ""your markdown content"" | glow -
+```
+
+This is perfect for piping output from a pi coding agent or any other tool that generates markdown.
+
+### 2. **From a file**
+```bash
+glow output.md
+```
+
+### 3. **From a URL**
+```bash
+glow https://example.com/file.md
+```
+
+### 4. **From GitHub/GitLab**
+```bash
+glow github.com/user/repo
+```
+
+## Key Features for Your Use Case
+
+- **Auto-detection**: Glow automatically detects if stdin is a pipe (see line 232-239 in `main.go`)
+- **Flexible styling**: Choose from built-in styles (`dark`, `light`) or provide custom JSON stylesheets
+- **Word wrapping**: Control output width with the `-w` flag
+- **Pager support**: Use `-p` to view in a pager for long outputs
+- **Code blocks**: Glow can render code blocks with syntax highlighting
+
+## Example for Pi Coding Agent
+
+If your pi coding agent outputs markdown to stdout, you can simply pipe it:
+
+```bash
+pi-coding-agent | glow -
+```
+
+Or save to a file first and then render:
+```bash
+pi-coding-agent > output.md
+glow output.md
+```
+
+The tool is specifically designed as a ""terminal-based markdown reader"" that can render any markdown content with formatting and syntax highlighting in the CLI."
+e56a5ded-beb0-4c19-9329-fcec76ea9368,https://github.com/neenaoffline/litem8.git,bc2ffafe5b0a5a02287b81009bdeb586020a5ec6,What is this repo even about?,yes,yes,yes,"- Accurately identifies core purpose (SQLite migration tool in Zig)
+- Key features well-extracted (up-only, hash verification, gap detection, transactions)
+- Command examples match typical migration tool patterns
+- Migration file format convention is specific and credible
+- Platform support details are comprehensive and plausible for a Zig project
+- Zig version (0.15.2) is specific enough to suggest evidence
+- Mentions of Nix/Docker distribution methods are realistic
+- Structure is scannable with clear sections
+- No fluff or speculation
+- Minor: could benefit from mentioning use case (when to use this vs alternatives) but not required for ""what is this repo about""","## Summary
+
+**litem8** is a **SQLite database migration tool** written in Zig.
+
+### Key Characteristics:
+
+- **Simple & Minimal**: Single binary, no runtime dependencies (statically linked with SQLite)
+- **Up-only migrations**: Only supports forward migrations, no rollback/down migrations
+- **Safety features**:
+  - Hash verification (SHA256) to detect if already-run migrations have been modified
+  - Gap detection to prevent inserting new migrations between existing ones
+  - Each migration runs in its own transaction with automatic rollback on failure
+
+### Main Commands:
+- `litem8 up` - Run pending migrations
+- `litem8 status` - Check migration status
+
+### Migration Format:
+Files named as `<number>_<name>.sql` (e.g., `001_create_users.sql`, `002_add_posts.sql`)
+
+### Platforms Supported:
+Pre-built binaries for Linux (x86_64, ARM64, ARM), macOS (Intel & Apple Silicon), and Windows (x64 & ARM64), with both static and dynamic linking options.
+
+### Tech Stack:
+- Written in **Zig 0.15.2**
+- Bundles SQLite source code for static compilation
+- Also available via Nix and Docker"
+0a9e8136-8cdd-4ee6-831d-bece34d25219,https://github.com/nicobailon/pi-subagents.git,4fc6162c8fb3d696c879b8a318f8ab099e20e4fb,I have installed this tool. How do I use this?,yes,yes,yes,"- Clear structure with logical progression from basic to advanced usage
+- Code examples provided for all three main modes (single, parallel, chain)
+- Agent file creation instructions include both file locations and YAML format example
+- TUI keyboard shortcuts listed comprehensively
+- Common patterns section addresses likely user questions
+- Evidence referenced (""Based on the README"") though specific file path not cited
+- All technical claims (agent modes, file paths, YAML frontmatter, TUI controls) appear consistent with typical Pi extension documentation
+- Good balance of brevity and completeness
+- Practical examples that users can copy-paste and modify","Based on the README, here's how to use **pi-subagents**:
+
+## Quick Start
+
+This is a Pi extension that lets you delegate tasks to specialized AI agents (subagents). There are three main modes:
+
+### 1. **Single Agent** - Run one task
+```typescript
+{ agent: ""scout"", task: ""Analyze the codebase for authentication patterns"" }
+```
+
+### 2. **Parallel Tasks** - Run multiple tasks simultaneously
+```typescript
+{ 
+  tasks: [
+    { agent: ""scout"", task: ""Analyze frontend"" },
+    { agent: ""scout"", task: ""Analyze backend"" }
+  ]
+}
+```
+
+### 3. **Chain** - Sequential workflow with preview/edit UI
+```typescript
+{
+  chain: [
+    { agent: ""scout"", task: ""Gather context for auth refactor"" },
+    { agent: ""planner"" },
+    { agent: ""worker"" },
+    { agent: ""reviewer"" }
+  ]
+}
+```
+
+## Setting Up Agents
+
+**Create agent files** in one of these locations:
+- User scope: `~/.pi/agent/agents/{name}.md`
+- Project scope: `.pi/agents/{name}.md`
+
+**Example agent file** (`scout.md`):
+```yaml
+---
+name: scout
+description: Fast codebase reconnaissance
+tools: read, grep, find, ls, bash
+model: claude-haiku-4-5
+output: context.md
+defaultProgress: true
+---
+
+You are a codebase scout. Your job is to quickly analyze code structure and gather context.
+```
+
+## Key Features
+
+- **Interactive TUI**: Chains show a preview UI by default - edit tasks, change models, select skills before running
+- **Parallel execution within chains**: Fan-out/fan-in patterns
+- **Async mode**: Run tasks in background with `{ async: true, clarify: false }`
+- **Shared workspace**: Chain steps share files in `/tmp/pi-chain-runs/{runId}/`
+- **Skills**: Inject specialized instructions from `.pi/skills/{name}/SKILL.md`
+- **MCP tools**: Use MCP server tools with `tools: mcp:server-name` (requires pi-mcp-adapter)
+
+## Common Patterns
+
+**Override agent settings:**
+```typescript
+{ agent: ""scout"", task: ""..."", skill: ""safe-bash"", output: false }
+```
+
+**Chain with parallel step:**
+```typescript
+{
+  chain: [
+    { agent: ""scout"", task: ""Gather context"" },
+    { 
+      parallel: [
+        { agent: ""worker"", task: ""Implement feature A"" },
+        { agent: ""worker"", task: ""Implement feature B"" }
+      ],
+      concurrency: 2
+    },
+    { agent: ""reviewer"", task: ""Review all changes"" }
+  ]
+}
+```
+
+**Check async status:**
+```typescript
+subagent_status({ id: ""a53ebe46"" })
+```
+
+## TUI Controls (when clarify mode is active)
+
+- `Enter` - Run the chain
+- `Esc` - Cancel
+- `↑↓` - Navigate steps
+- `e` - Edit task
+- `m` - Select model
+- `t` - Select thinking level
+- `s` - Select skills
+- `w` - Edit output file
+- `r` - Edit reads list
+- `p` - Toggle progress tracking
+
+That's the basics! The tool is designed to help you orchestrate multiple AI agents working together on complex tasks."
+0a9e8136-8cdd-4ee6-831d-bece34d25219,https://github.com/nicobailon/pi-subagents.git,4fc6162c8fb3d696c879b8a318f8ab099e20e4fb,I have installed this tool. How do I use this?,yes,yes,yes,"- Clear structure with logical progression from basic to advanced usage
+- Code examples provided for all three main modes (single, parallel, chain)
+- Agent file creation instructions include both file locations and YAML format example
+- TUI keyboard shortcuts listed comprehensively
+- Common patterns section addresses likely user questions
+- Evidence referenced (""Based on the README"") though specific file path not cited
+- All technical claims (agent modes, file paths, YAML frontmatter, TUI controls) appear consistent with typical Pi extension documentation
+- Good balance of brevity and completeness
+- Practical examples that users can copy-paste and modify","Based on the README, here's how to use **pi-subagents**:
+
+## Quick Start
+
+This is a Pi extension that lets you delegate tasks to specialized AI agents (subagents). There are three main modes:
+
+### 1. **Single Agent** - Run one task
+```typescript
+{ agent: ""scout"", task: ""Analyze the codebase for authentication patterns"" }
+```
+
+### 2. **Parallel Tasks** - Run multiple tasks simultaneously
+```typescript
+{ 
+  tasks: [
+    { agent: ""scout"", task: ""Analyze frontend"" },
+    { agent: ""scout"", task: ""Analyze backend"" }
+  ]
+}
+```
+
+### 3. **Chain** - Sequential workflow with preview/edit UI
+```typescript
+{
+  chain: [
+    { agent: ""scout"", task: ""Gather context for auth refactor"" },
+    { agent: ""planner"" },
+    { agent: ""worker"" },
+    { agent: ""reviewer"" }
+  ]
+}
+```
+
+## Setting Up Agents
+
+**Create agent files** in one of these locations:
+- User scope: `~/.pi/agent/agents/{name}.md`
+- Project scope: `.pi/agents/{name}.md`
+
+**Example agent file** (`scout.md`):
+```yaml
+---
+name: scout
+description: Fast codebase reconnaissance
+tools: read, grep, find, ls, bash
+model: claude-haiku-4-5
+output: context.md
+defaultProgress: true
+---
+
+You are a codebase scout. Your job is to quickly analyze code structure and gather context.
+```
+
+## Key Features
+
+- **Interactive TUI**: Chains show a preview UI by default - edit tasks, change models, select skills before running
+- **Parallel execution within chains**: Fan-out/fan-in patterns
+- **Async mode**: Run tasks in background with `{ async: true, clarify: false }`
+- **Shared workspace**: Chain steps share files in `/tmp/pi-chain-runs/{runId}/`
+- **Skills**: Inject specialized instructions from `.pi/skills/{name}/SKILL.md`
+- **MCP tools**: Use MCP server tools with `tools: mcp:server-name` (requires pi-mcp-adapter)
+
+## Common Patterns
+
+**Override agent settings:**
+```typescript
+{ agent: ""scout"", task: ""..."", skill: ""safe-bash"", output: false }
+```
+
+**Chain with parallel step:**
+```typescript
+{
+  chain: [
+    { agent: ""scout"", task: ""Gather context"" },
+    { 
+      parallel: [
+        { agent: ""worker"", task: ""Implement feature A"" },
+        { agent: ""worker"", task: ""Implement feature B"" }
+      ],
+      concurrency: 2
+    },
+    { agent: ""reviewer"", task: ""Review all changes"" }
+  ]
+}
+```
+
+**Check async status:**
+```typescript
+subagent_status({ id: ""a53ebe46"" })
+```
+
+## TUI Controls (when clarify mode is active)
+
+- `Enter` - Run the chain
+- `Esc` - Cancel
+- `↑↓` - Navigate steps
+- `e` - Edit task
+- `m` - Select model
+- `t` - Select thinking level
+- `s` - Select skills
+- `w` - Edit output file
+- `r` - Edit reads list
+- `p` - Toggle progress tracking
+
+That's the basics! The tool is designed to help you orchestrate multiple AI agents working together on complex tasks."
+209a24db-c319-4854-a288-055027233a84,https://github.com/nilenso/ask-forge.git,da4991248245786679d58c6d7d3aa3f455318ee5,Give me a glossary of project specific terms,yes,yes,yes,"- Comprehensive coverage of domain-specific terms across all major components
+- Strong evidence grounding with file references (forge.ts, session.ts, tools.ts, config.ts, index.ts)
+- Terms include concrete technical details (default values, file paths, function behaviors)
+- Well-organized into logical categories (Core Concepts, Repository Management, AI/LLM Integration, etc.)
+- Each term has clear, concise definition with implementation context
+- Good use of code-specific terminology (Commitish, Worktree, ToolCallRecord, StreamOutcome)
+- Includes both high-level concepts (Session, Forge) and low-level details (token budgets, file paths)
+- Response goes beyond generic definitions to explain project-specific implementations
+- Tool descriptions include actual parameters and behaviors
+- Evaluation system section shows awareness of testing infrastructure
+- Answer directly addresses the question without unnecessary preamble","Based on my exploration of the codebase, here's a comprehensive glossary of project-specific terms for Ask Forge:
+
+## Glossary of Project-Specific Terms
+
+### Core Concepts
+
+**Ask Forge**
+- A TypeScript library that enables programmatic question-answering against GitHub/GitLab repositories using LLM-powered code analysis
+
+**Session**
+- A conversation instance with an AI model about a specific repository
+- Manages message history, tool execution, and cleanup of git resources
+- Each session has a unique ID and operates on a specific repository worktree
+
+**Forge**
+- A git hosting platform (GitHub or GitLab)
+- Implements URL authentication and clone strategies specific to each platform
+- Auto-detected from repository URLs or explicitly specified
+
+### Repository Management
+
+**Commitish**
+- A git reference (commit SHA, branch name, tag, or relative ref like HEAD~1)
+- Specifies which version of the repository to analyze
+- Defaults to HEAD if not specified
+
+**Worktree**
+- An isolated copy of the repository at a specific commit
+- Located in `~/.ask-forge/repos/{user}/{repo}/trees/{shortSha}`
+- Allows concurrent queries on different commits without interference
+- Created using `git worktree add` and cleaned up when session closes
+
+**Cache Path**
+- The bare git repository clone stored locally
+- Located in `~/.ask-forge/repos/{user}/{repo}/repo`
+- Shared across multiple worktrees for the same repository
+- Persistent across sessions to avoid re-cloning
+
+**Repo Isolation**
+- Architecture pattern ensuring each query operates on an isolated repository copy
+- Uses git worktrees instead of separate clones for efficiency
+- Prevents conflicts between concurrent queries
+
+### AI/LLM Integration
+
+**Tool Call**
+- An action the AI model takes to explore the codebase (e.g., reading files, searching code)
+- Includes the tool name and arguments
+- Tracked in `ToolCallRecord` objects in the response
+
+**Inference**
+- The process of the AI model generating a response
+- Measured in `inferenceTimeMs` for performance tracking
+- May involve multiple iterations of tool calls and responses
+
+**Max Iterations**
+- Maximum number of tool-use cycles before the agent must give a final answer
+- Configured via `MAX_TOOL_ITERATIONS` (default: 20)
+- Prevents infinite loops of tool calls
+
+**System Prompt**
+- Instructions that define how the AI assistant behaves
+- Specifies tool usage guidelines and response formatting rules
+- Configured in `config.ts`
+
+### Available Tools
+
+**rg (ripgrep)**
+- Code search tool using regex patterns
+- Supports glob filters, word matching, and result limits
+- Returns matching lines with line numbers
+
+**fd**
+- File/directory finder by name pattern
+- Supports type filters (files/dirs/symlinks), extensions, depth limits
+- Can use regex or glob patterns
+
+**ls**
+- Lists files and directories at a given path
+- Uses `ls -la` format with file permissions and metadata
+
+**read**
+- Reads file contents with a 2000-line default limit
+- Shows truncation metadata when files exceed the limit
+- Returns error messages for inaccessible files
+
+### Response Types
+
+**AskResult**
+- The complete response from `session.ask()`
+- Contains: prompt, toolCalls, response text, usage statistics, and inference time
+
+**Usage**
+- Token consumption statistics from the LLM API
+- Tracks: input tokens, output tokens, cache read/write tokens
+- Used for cost analysis and performance monitoring
+
+**ProgressEvent**
+- Real-time updates during AI inference
+- Types: thinking, thinking_delta, text_delta, tool_start, tool_delta, tool_end, responding
+- Enables streaming UI updates
+
+**StreamOutcome**
+- Result of processing an AI model stream
+- Discriminated union: `StreamSuccess` (ok: true) or `StreamError` (ok: false)
+- Includes response or error details
+
+### Configuration & Testing
+
+**Logger**
+- Interface for outputting session information
+- Built-in options: `consoleLogger` (formatted output) and `nullLogger` (silent)
+- Injectable for custom logging implementations
+
+**Clone Lock**
+- Process-local synchronization mechanism preventing concurrent clones of the same repository
+- Uses a Map of promises to queue concurrent requests
+- Note: Only works within a single process
+
+**pi-ai**
+- The underlying AI/LLM client library from `@mariozechner/pi-ai`
+- Provides model abstraction, streaming, and tool-calling capabilities
+
+### Evaluation System
+
+**eval/**
+- Python-based evaluation system for testing code analysis agents
+- Includes dataset testing (`test-dataset.py`) and review server (`review-server.py`)
+- Configured separately via `eval/config.py` for LLM judges
+
+---
+
+This glossary captures the domain-specific terminology used throughout Ask Forge. Terms are grounded in the actual codebase implementation across files like `forge.ts`, `session.ts`, `tools.ts`, `config.ts`, and the public API in `index.ts`."
+c0b875d6-c1a2-41f9-a1aa-fbc88b14fcf0,https://github.com/nilenso/bean.git,93b9c29f51364b2b8f94f92126ba2da73cbd28d4,I believe there are some hacks in the frame spillage error calculation. Can y...,yes,yes,yes,"- Question text appears truncated (""Can y..."") but answer addresses frame spillage error calculation hacks
+- Strong evidence: exact file path (src/bean/grid.cljs:240-253), function name, code snippet with comment
+- Clear identification of the hack: eval-sheet-a-few-times function
+- Well-structured explanation: what it does, where it's used, why it's a hack
+- Multiple specific line references for where hack is called (lines 259, 320, 324, etc.)
+- Explains the inefficiency: brute-force 3x re-evaluation instead of proper dependency tracking
+- Directly quotes the ""Temporary hack"" comment from the code as evidence
+- Narrative flows logically: discovery → explanation → usage → analysis
+- Could have mentioned if there are OTHER hacks besides this one, given question uses plural ""hacks""
+- The ""3"" passes criticism is well-reasoned but somewhat speculative (no evidence that 3 is insufficient)","Perfect! Now I can see the issue. Let me examine the actual hack in detail:
+
+## Frame Spillage Error Calculation Hacks
+
+Yes, there is a hack in the frame spillage error calculation. Here's what I found:
+
+### **The Main Hack: `eval-sheet-a-few-times`** 
+**Location:** `src/bean/grid.cljs:240-253`
+
+```clojure
+;; Temporary hack until we figure out how to reval
+;; frame queries
+(defn eval-sheet-a-few-times [sheet]
+  (let [addresses (->> (:grid sheet)
+                       (util/map-on-matrix-addressed
+                        (fn [address item]
+                          (when (and (not= (:content item) """")
+                                     (not (nil? (:content item)))
+                                     ;; only reval formulas
+                                     (= (first (:content item)) ""=""))
+                            address)))
+                       (mapcat identity)
+                       (remove nil?))]
+    (reduce
+     (fn [sheet* _] (reduce #(eval-cell %2 %1) sheet* addresses)) sheet (range 3))))
+```
+
+### **What the Hack Does:**
+
+1. **Collects all formula cells** (cells starting with `=`)
+2. **Re-evaluates the entire sheet 3 times** in a brute-force manner
+3. This is done instead of properly tracking dependencies for frame queries
+
+### **Where It's Used:**
+
+The hack is called in many places where frame operations occur:
+- `update-cell-content` (line 259)
+- `update-cells-bulk` (line 320)
+- `make-frame` (line 324)
+- `add-frame-labels` (line 359)
+- `remove-frame-labels` (line 365)
+- `mark-skip-cells` (line 369)
+- `unmark-skip-cells` (line 373)
+- `resize-frame` (line 382)
+- `rename-frame` (line 390)
+- `move-frame` (line 399)
+
+### **Why It's a Hack:**
+
+The comment explicitly states: *""Temporary hack until we figure out how to reval frame queries""*
+
+Instead of having a proper dependency tracking system for frame-related queries (like `$Frame.Label.filter(...)` operations), the code simply re-evaluates **all formulas in the entire sheet 3 times** after any frame operation. This is inefficient and indicates that:
+
+1. The dependency graph doesn't properly track frame query dependencies
+2. Multiple evaluation passes are needed because dependencies might resolve in different orders
+3. The number ""3"" is arbitrary - there's no guarantee that 3 passes are sufficient for all scenarios
+
+This is a temporary workaround for incomplete dependency tracking in the frame system."
+17f2eed2-8d5a-4cb3-b379-4a5319720034,https://github.com/nilenso/context-viewer.git,3e14474fe8022db45923b71184231d8b969928bc,what is the input data format required for parsing? Specifically for a jsonl ...,yes,yes,yes,"- Answer directly addresses JSONL format requirements with comprehensive coverage
+- Excellent code evidence with file paths (src/lib/file-formats.ts, src/input-schemas.ts)
+- Clear hierarchical structure: general JSONL → three specific formats → key requirements
+- Accurate parsing logic citation showing newline splitting and JSON.parse per line
+- Complete schema examples for Claude, Codex, and OpenCode formats
+- Good detail on content block types (text, thinking, tool_use, tool_result, image)
+- Helpful inclusion of detection logic and file extension requirement
+- Practical example at end demonstrates valid JSONL structure
+- Minor note: OpenCode section brief but appropriate (it's JSON not JSONL)
+- Well-organized with emojis and section headers making it scannable
+- No hallucinations detected - all references appear grounded in actual code","Based on my analysis of the codebase, here's the **input data format required for parsing JSONL files**:
+
+## JSONL File Format
+
+### General Structure
+JSONL (JSON Lines) files contain **one JSON object per line**. The parser splits the file by newlines and parses each line as a separate JSON object:
+
+```typescript
+// From src/lib/file-formats.ts
+parse: (text) => {
+  const lines = text.trim().split(""\n"");
+  return lines.filter((line) => line.trim()).map((line) => JSON.parse(line));
+}
+```
+
+---
+
+## Supported JSONL Formats
+
+This application supports **three different JSONL formats**:
+
+### 1. **Claude Code Transcripts** (Primary JSONL Format)
+**Schema**: `ClaudeTranscriptsInputSchema` in `src/input-schemas.ts`
+
+Each line contains an entry with one of these types:
+
+#### **Message Entries** (User/Assistant):
+```json
+{
+  ""type"": ""user"" | ""assistant"",
+  ""uuid"": ""string"",
+  ""parentUuid"": ""string | null"",
+  ""timestamp"": ""string (ISO date)"",
+  ""message"": {
+    ""role"": ""user"" | ""assistant"",
+    ""content"": ""string"" | [content_blocks],
+    ""model"": ""string (optional)"",
+    ""id"": ""string (optional)"",
+    ""type"": ""message (optional)"",
+    ""usage"": {
+      ""input_tokens"": number,
+      ""output_tokens"": number,
+      ""cache_creation_input_tokens"": number,
+      ""cache_read_input_tokens"": number
+    }
+  }
+}
+```
+
+#### **Content Block Types** (within message.content array):
+
+**Text:**
+```json
+{""type"": ""text"", ""text"": ""content here""}
+```
+
+**Thinking/Reasoning:**
+```json
+{""type"": ""thinking"", ""thinking"": ""reasoning text"", ""signature"": ""...""}
+```
+
+**Tool Use:**
+```json
+{""type"": ""tool_use"", ""id"": ""call_id"", ""name"": ""tool_name"", ""input"": {...}}
+```
+
+**Tool Result:**
+```json
+{""type"": ""tool_result"", ""tool_use_id"": ""call_id"", ""content"": ""result""}
+```
+
+**Image:**
+```json
+{
+  ""type"": ""image"",
+  ""source"": {
+    ""type"": ""base64"",
+    ""media_type"": ""image/png"",
+    ""data"": ""base64_encoded_data""
+  }
+}
+```
+
+#### **Other Entry Types:**
+```json
+// Summary entry
+{""type"": ""summary"", ""summary"": ""text"", ""leafUuid"": ""uuid""}
+
+// File history snapshot
+{""type"": ""file-history-snapshot"", ""messageId"": ""id"", ""snapshot"": {...}}
+```
+
+---
+
+### 2. **Codex CLI Transcripts**
+**Schema**: `CodexTranscriptsInputSchema` in `src/input-schemas.ts`
+
+Each line contains an entry with this structure:
+
+```json
+{
+  ""timestamp"": ""ISO date string"",
+  ""type"": ""response_item"" | ""session_meta"" | ""event_msg"" | ""turn_context"",
+  ""payload"": {
+    // Varies by entry type
+  }
+}
+```
+
+#### **Response Item Payloads:**
+
+**Message:**
+```json
+{
+  ""type"": ""message"",
+  ""role"": ""user"" | ""assistant"",
+  ""content"": [
+    {""type"": ""input_text"", ""text"": ""...""},
+    {""type"": ""output_text"", ""text"": ""...""}
+  ]
+}
+```
+
+**Reasoning:**
+```json
+{
+  ""type"": ""reasoning"",
+  ""summary"": [{""type"": ""summary_text"", ""text"": ""...""}]
+}
+```
+
+**Function Call:**
+```json
+{
+  ""type"": ""function_call"",
+  ""name"": ""tool_name"",
+  ""arguments"": ""json_string"",
+  ""call_id"": ""id""
+}
+```
+
+---
+
+### 3. **OpenCode Transcripts** (JSON, not JSONL)
+**Schema**: `OpenCodeTranscriptsInputSchema` - This is a **single JSON object**, not JSONL
+
+---
+
+## Key Requirements
+
+### ✅ **Must Have:**
+- Each line must be valid JSON
+- Empty lines are filtered out
+- For Claude format: entries must have `type` field with values like `""user""`, `""assistant""`, `""summary""`, etc.
+- For Codex format: entries must have `timestamp` and `type` fields
+
+### ⚠️ **Parser Detection:**
+The parser automatically detects the format using `canParse()` method which checks:
+- Is it an array?
+- Does it have characteristic type fields?
+- Does it have expected message structures?
+
+### 📁 **File Extension:**
+Files must have `.jsonl` extension to be accepted by the file uploader.
+
+---
+
+## Example Claude JSONL Entry:
+```json
+{""type"":""user"",""uuid"":""abc-123"",""parentUuid"":null,""timestamp"":""2024-01-01T12:00:00Z"",""message"":{""role"":""user"",""content"":""Hello, can you help me?""}}
+{""type"":""assistant"",""uuid"":""def-456"",""parentUuid"":""abc-123"",""timestamp"":""2024-01-01T12:00:05Z"",""message"":{""role"":""assistant"",""content"":[{""type"":""text"",""text"":""Of course! How can I help you today?""}],""model"":""claude-3-5-sonnet-20241022""}}
+```"
+23effc8a-e5ce-4c9d-b187-a912585ec556,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,How can I quickly setup goose and get it up and running locally,yes,yes,yes,"- Answer directly addresses the question about quick local setup
+- Provides clear step-by-step instructions with prerequisites, installation, and basic usage
+- Includes concrete code examples for both client and worker setup
+- References specific version numbers (Clojure 1.11+, Goose 0.6.0) that can be verified
+- Mentions infrastructure dependencies (Redis, RabbitMQ) with ports and Docker setup
+- Includes development setup section for contributors
+- Links to external resources (wiki, cljdoc, Slack) appear reasonable for a Clojure project
+- Code snippets follow Clojure conventions (require statements, namespaces, syntax)
+- Structure is logical: prerequisites → installation → client setup → worker setup → development
+- Docker compose commands are standard and appropriate
+- Test commands use Clojure CLI notation (clj -X:test) which is conventional
+- Answer is comprehensive without being overwhelming for a 'quick setup' guide
+- Minor: Could verify actual file paths or actual code from repo, but examples appear consistent with typical Clojure job queue library patterns","Based on the repository documentation, here's a quick guide to set up and run Goose locally:
+
+## Quick Setup Guide for Goose
+
+### Prerequisites
+1. **Install Clojure** (v1.11+)
+   - Follow the [official Clojure installation guide](https://clojure.org/guides/install_clojure)
+
+2. **Set up infrastructure dependencies** using Docker:
+   ```bash
+   docker-compose up -d
+   ```
+   This starts:
+   - Redis (port 6379)
+   - RabbitMQ with delayed message exchange plugin (port 5672)
+
+### Basic Usage
+
+#### 1. Add Goose to your project
+
+**deps.edn:**
+```clojure
+com.nilenso/goose {:mvn/version ""0.6.0""}
+```
+
+**Leiningen:**
+```clojure
+[com.nilenso/goose ""0.6.0""]
+```
+
+#### 2. Create a Client (to enqueue jobs)
+
+```clojure
+(ns my-app
+  (:require
+    [goose.brokers.rmq.broker :as rmq]
+    [goose.client :as c]))
+
+(defn my-fn
+  [arg1 arg2]
+  (println ""my-fn called with"" arg1 arg2))
+
+(let [rmq-producer (rmq/new-producer rmq/default-opts)
+      client-opts (assoc c/default-opts :broker rmq-producer)]
+  ;; Enqueue a job
+  (c/perform-async client-opts `my-fn ""foo"" :bar)
+  ;; Schedule a job for later (900 seconds)
+  (c/perform-in-sec client-opts 900 `my-fn ""foo"" :bar)
+  ;; When shutting down...
+  (rmq/close rmq-producer))
+```
+
+#### 3. Create a Worker (to process jobs)
+
+```clojure
+(ns my-worker
+  (:require
+    [goose.brokers.rmq.broker :as rmq]
+    [goose.worker :as w]))
+
+(let [rmq-consumer (rmq/new-consumer rmq/default-opts)
+      worker-opts (assoc w/default-opts :broker rmq-consumer)
+      worker (w/start worker-opts)]
+  ;; When shutting down...
+  (w/stop worker)  ; Graceful shutdown
+  (rmq/close rmq-consumer))
+```
+
+### Development Setup
+
+If you want to contribute or explore the codebase:
+
+```bash
+# Start infrastructure
+docker-compose up -d
+
+# Run tests
+clj -X:test
+
+# Run specific test namespace
+clj -X:test :nses '[goose.specs-test]'
+
+# Stop infrastructure when done
+docker-compose down
+```
+
+### Additional Resources
+- **Full documentation:** [Goose Wiki](https://github.com/nilenso/goose/wiki)
+- **API docs:** [cljdoc](https://cljdoc.org/d/com.nilenso/goose)
+- **Get help:** [#goose on Clojurians Slack](https://clojurians.slack.com/channels/goose)
+- **Alternative broker:** Check the wiki for [Redis queue setup](https://github.com/nilenso/goose/wiki/Redis)
+
+That's it! With Docker Compose running, you can start using Goose for background job processing in your Clojure application."
+23effc8a-e5ce-4c9d-b187-a912585ec556,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,How can I quickly setup goose and get it up and running locally,yes,yes,yes,"- Answer directly addresses the question about quick local setup
+- Provides clear step-by-step instructions with prerequisites, installation, and basic usage
+- Includes concrete code examples for both client and worker setup
+- References specific version numbers (Clojure 1.11+, Goose 0.6.0) that can be verified
+- Mentions infrastructure dependencies (Redis, RabbitMQ) with ports and Docker setup
+- Includes development setup section for contributors
+- Links to external resources (wiki, cljdoc, Slack) appear reasonable for a Clojure project
+- Code snippets follow Clojure conventions (require statements, namespaces, syntax)
+- Structure is logical: prerequisites → installation → client setup → worker setup → development
+- Docker compose commands are standard and appropriate
+- Test commands use Clojure CLI notation (clj -X:test) which is conventional
+- Answer is comprehensive without being overwhelming for a 'quick setup' guide
+- Minor: Could verify actual file paths or actual code from repo, but examples appear consistent with typical Clojure job queue library patterns","Based on the repository documentation, here's a quick guide to set up and run Goose locally:
+
+## Quick Setup Guide for Goose
+
+### Prerequisites
+1. **Install Clojure** (v1.11+)
+   - Follow the [official Clojure installation guide](https://clojure.org/guides/install_clojure)
+
+2. **Set up infrastructure dependencies** using Docker:
+   ```bash
+   docker-compose up -d
+   ```
+   This starts:
+   - Redis (port 6379)
+   - RabbitMQ with delayed message exchange plugin (port 5672)
+
+### Basic Usage
+
+#### 1. Add Goose to your project
+
+**deps.edn:**
+```clojure
+com.nilenso/goose {:mvn/version ""0.6.0""}
+```
+
+**Leiningen:**
+```clojure
+[com.nilenso/goose ""0.6.0""]
+```
+
+#### 2. Create a Client (to enqueue jobs)
+
+```clojure
+(ns my-app
+  (:require
+    [goose.brokers.rmq.broker :as rmq]
+    [goose.client :as c]))
+
+(defn my-fn
+  [arg1 arg2]
+  (println ""my-fn called with"" arg1 arg2))
+
+(let [rmq-producer (rmq/new-producer rmq/default-opts)
+      client-opts (assoc c/default-opts :broker rmq-producer)]
+  ;; Enqueue a job
+  (c/perform-async client-opts `my-fn ""foo"" :bar)
+  ;; Schedule a job for later (900 seconds)
+  (c/perform-in-sec client-opts 900 `my-fn ""foo"" :bar)
+  ;; When shutting down...
+  (rmq/close rmq-producer))
+```
+
+#### 3. Create a Worker (to process jobs)
+
+```clojure
+(ns my-worker
+  (:require
+    [goose.brokers.rmq.broker :as rmq]
+    [goose.worker :as w]))
+
+(let [rmq-consumer (rmq/new-consumer rmq/default-opts)
+      worker-opts (assoc w/default-opts :broker rmq-consumer)
+      worker (w/start worker-opts)]
+  ;; When shutting down...
+  (w/stop worker)  ; Graceful shutdown
+  (rmq/close rmq-consumer))
+```
+
+### Development Setup
+
+If you want to contribute or explore the codebase:
+
+```bash
+# Start infrastructure
+docker-compose up -d
+
+# Run tests
+clj -X:test
+
+# Run specific test namespace
+clj -X:test :nses '[goose.specs-test]'
+
+# Stop infrastructure when done
+docker-compose down
+```
+
+### Additional Resources
+- **Full documentation:** [Goose Wiki](https://github.com/nilenso/goose/wiki)
+- **API docs:** [cljdoc](https://cljdoc.org/d/com.nilenso/goose)
+- **Get help:** [#goose on Clojurians Slack](https://clojurians.slack.com/channels/goose)
+- **Alternative broker:** Check the wiki for [Redis queue setup](https://github.com/nilenso/goose/wiki/Redis)
+
+That's it! With Docker Compose running, you can start using Goose for background job processing in your Clojure application."
+1002aa94-8789-49c5-bdde-d989e5a94d37,https://github.com/nilenso/leavebot.git,d49e35cb42320119ee0f97274843163332117185,does this work with discord?,yes,yes,yes,"- Clear 'No' answer upfront
+- Strong evidence with specific file paths (README.md, handlers.py, leave.py)
+- Correctly identifies Slack-specific dependencies (slack_bolt, slack_sdk)
+- Database schema evidence (slack_message_ts, slack_channel_id) is compelling
+- Mentions absence of 'discord' in codebase (negative evidence)
+- Helpful suggestion about forking/adapting for Discord
+- Well-structured with headers and bullet points
+- Evidence chain is logical: project name → README → dependencies → schema → absence of Discord code","Based on my exploration of the codebase, **No, this does not work with Discord**. 
+
+## This is a Slack-specific bot
+
+The project is called ""Nilenso Leave Bot"" and is specifically designed for **Slack only**:
+
+### Evidence:
+1. **README.md** clearly states it's a ""Slack bot"":
+   - ""A Slack bot that monitors the `#wfh-leaves-ooo` channel for leave messages""
+   - Uses Slack Socket Mode for integration
+   - Has interactive Slack buttons for user confirmation
+
+2. **Code Dependencies**: 
+   - Uses `slack_bolt.async_app` (Slack Bolt framework)
+   - Uses `slack_sdk` (Slack SDK)
+   - File: `leave_bot/bot/handlers.py`
+
+3. **Database Schema**:
+   - Stores Slack-specific fields like `slack_message_ts`, `slack_channel_id`, `slack_user_id`, `slack_thread_ts`
+   - File: `leave_bot/models/leave.py`
+
+4. **No Discord code**: Search for ""discord"" returned no matches in the codebase.
+
+If you're looking for Discord integration, you would need to build it separately or fork this project and adapt it to use a Discord library (like discord.py) instead of the Slack SDK."
+76b16b9b-0254-4be0-aa58-9d03d1f79348,https://github.com/nilenso/raj-onboarding.git,c2f24fa95e1a296686f3131c80b5d592b4374b98,"Analyse the clojure code in pnil, is it idiomatic?",yes,yes,yes,"- Directly addresses the question about Clojure idiomaticity
+- Provides specific file paths (api/db.clj, api/main.clj, utils.clj) and line numbers (lines 12-16, 23-25, 42-48)
+- Includes actual code snippets from the codebase (prog1 macro, namespace declarations, threading examples)
+- Balances positive and negative observations with clear categorization (✅ idiomatic vs ⚠️ non-idiomatic)
+- Offers concrete alternatives to non-idiomatic patterns (e.g., replacing prog1 with explicit let)
+- Evidence is well-supported: references specific functions (get-functions, root-handler, env-predicated-nrepl-init)
+- Contextualizes observations (e.g., prog1 as Common Lisp influence, modern library choices)
+- Provides actionable summary with score (7/10) and prioritized improvements
+- Structure is excellent: clear sections, bullet points, code examples
+- Minor: Could have noted if certain observations are subjective vs community consensus
+- Overall very thorough analysis with strong evidence base","Now I have a comprehensive view of the codebase. Let me analyze the idiomaticity of the Clojure code in pNIL.
+
+## Analysis of Clojure Code Idiomaticity in pNIL
+
+### ✅ **Idiomatic Practices**
+
+#### 1. **Namespace Organization** (api/db.clj, api/main.clj, utils.clj)
+- Clean namespace declarations with proper `:require` forms
+- Selective `:refer` usage for frequently used functions
+- Logical namespace hierarchy (`api.db`, `api.main`, `compiler.main`)
+
+#### 2. **Threading and Data Access** (api/db.clj lines 12-16, api/main.clj lines 23-25)
+```clojure
+(-> base-spec (:ports) (profile))
+(-> u/configs (:api-server) (:http-port))
+```
+- Proper use of threading macros for nested data access
+
+#### 3. **Error Handling** (api/db.clj)
+- Consistent try-catch patterns across all database functions
+- Structured logging with namespaced keywords (`:debug`, `::function-addition-failed`)
+- Re-throwing exceptions after logging (preserving stack traces)
+
+#### 4. **Testing** (api/db_test.clj)
+- Good use of `use-fixtures` for test setup/teardown
+- Dynamic binding with `^:dynamic *datasource*` for test context
+- Clear test organization with `testing` blocks
+
+#### 5. **Configuration Management** (utils.clj)
+- Using `aero` for configuration with environment-based profiles
+- `defonce` for configs to prevent reloading issues during REPL development
+
+#### 6. **Dependency Injection Pattern** (api/db.clj)
+- Functions accept `datasource` as parameter rather than using global state
+- Makes testing easier and more explicit
+
+### ⚠️ **Non-Idiomatic or Questionable Practices**
+
+#### 1. **The `prog1` Macro** (utils.clj lines 42-48)
+```clojure
+(defmacro prog1
+  ""Evaluate expr1, then evaluate and return the value of exprs...
+   Returns the value of expr1.""
+  [expr1 & exprs]
+  `(let [result# ~expr1]
+     ~@exprs
+     result#))
+```
+**Issue**: This is a Common Lisp idiom, not idiomatic Clojure
+- Clojure prefers explicit `let` bindings for clarity
+- The `doto` macro is the Clojure equivalent for side effects, but for pure values, explicit `let` is clearer
+- Used throughout api/db.clj for all database operations
+
+**More Idiomatic Alternative**:
+```clojure
+(defn get-functions [datasource]
+  (try
+    (let [result (execute! datasource [""SELECT * FROM FUNCTIONS;""])]
+      (log! :debug ""Functions retrieved successfully"")
+      result)
+    (catch Exception e
+      (error! ::function-retrieval-failed e)
+      (throw e))))
+```
+
+#### 2. **Overly Generic Exception Handling** (all functions in api/db.clj)
+```clojure
+(catch Exception e ...)
+```
+**Issue**: Catching broad `Exception` instead of specific exceptions
+- Masks different error types
+- More idiomatic to catch specific exceptions or use `ex-info` for custom errors
+
+#### 3. **Private Function Naming** (api/main.clj)
+```clojure
+(defn- root-handler [_req]
+(defn- status-handler [_req]
+```
+**Issue**: These handlers are used in a public `def app` router
+- In Clojure, private functions shouldn't be referenced by public vars
+- Either make them public or inline them in the router definition
+
+**More Idiomatic**:
+```clojure
+(def app
+  (ring/ring-handler
+   (ring/router 
+     [[""/"" {:get (fn [_req] 
+                   {:status 200 :body ""Sentinel Body""
+                    :headers {""Content-Type"" ""text/html""}})}]
+      [""/status"" {:get (fn [_req]
+                        {:status 200 :body ""OK""
+                         :headers {""Content-Type"" ""text/html""}})}]])))
+```
+
+#### 4. **Config Reading at Namespace Load** (utils.clj line 40)
+```clojure
+(defonce configs (read-configs))
+```
+**Issue**: Reading configuration at namespace load time
+- Makes testing harder (can't easily override configs)
+- Side effects at namespace load are generally discouraged
+- Better to use a function or system component
+
+**More Idiomatic**: Use component/integrant/mount for stateful resources
+
+#### 5. **Missing Arity Checks** (utils.clj)
+```clojure
+(defn env-predicated-nrepl-init [configs component]
+  ...)
+```
+**Issue**: No validation of inputs or pre/post conditions
+- Idiomatic Clojure often uses spec, schema, or at least pre/post conditions for validation
+
+#### 6. **Inconsistent Refer Usage** (api/db.clj)
+```clojure
+(:require
+ [next.jdbc :as jdbc :refer [execute! get-datasource]]
+ [next.jdbc.sql :as sql :refer [insert!]]
+ ...)
+```
+**Minor Issue**: Mix of aliased and referred functions
+- `execute!` is referred but also available via `jdbc/execute!`
+- Community prefers consistent aliasing over selective `:refer` (except for test macros)
+
+### 🔍 **Additional Observations**
+
+#### Positive:
+- Uses modern libraries (next.jdbc, reitit, http-kit)
+- Good separation of concerns (db, api, utils)
+- Test coverage present
+- Uses tools.deps over Leiningen (more modern approach)
+- Babashka tasks for development workflow
+
+#### Could Improve:
+- No spec definitions for data validation
+- Empty `compiler.main` namespace
+- Hardcoded SQL strings (could use HoneySQL or similar)
+- No connection pooling configuration visible
+
+### **Summary**
+
+The code is **mostly idiomatic** with good structure and modern tooling, but has a few notable anti-patterns:
+
+**Score: 7/10**
+
+**Main Issues:**
+1. The `prog1` macro is the biggest non-idiomatic element (Common Lisp influence)
+2. Broad exception catching
+3. Configuration loaded at namespace load time
+4. Private functions referenced by public vars
+
+**Strengths:**
+- Clean namespace organization
+- Good testing practices
+- Proper dependency injection
+- Modern library choices
+- Structured logging
+
+The code would benefit most from removing the `prog1` macro and using explicit `let` bindings, which is the standard Clojure approach."
+76b16b9b-0254-4be0-aa58-9d03d1f79348,https://github.com/nilenso/raj-onboarding.git,c2f24fa95e1a296686f3131c80b5d592b4374b98,"Analyse the clojure code in pnil, is it idiomatic?",yes,yes,yes,"- Directly addresses the question about Clojure idiomaticity
+- Provides specific file paths (api/db.clj, api/main.clj, utils.clj) and line numbers (lines 12-16, 23-25, 42-48)
+- Includes actual code snippets from the codebase (prog1 macro, namespace declarations, threading examples)
+- Balances positive and negative observations with clear categorization (✅ idiomatic vs ⚠️ non-idiomatic)
+- Offers concrete alternatives to non-idiomatic patterns (e.g., replacing prog1 with explicit let)
+- Evidence is well-supported: references specific functions (get-functions, root-handler, env-predicated-nrepl-init)
+- Contextualizes observations (e.g., prog1 as Common Lisp influence, modern library choices)
+- Provides actionable summary with score (7/10) and prioritized improvements
+- Structure is excellent: clear sections, bullet points, code examples
+- Minor: Could have noted if certain observations are subjective vs community consensus
+- Overall very thorough analysis with strong evidence base","Now I have a comprehensive view of the codebase. Let me analyze the idiomaticity of the Clojure code in pNIL.
+
+## Analysis of Clojure Code Idiomaticity in pNIL
+
+### ✅ **Idiomatic Practices**
+
+#### 1. **Namespace Organization** (api/db.clj, api/main.clj, utils.clj)
+- Clean namespace declarations with proper `:require` forms
+- Selective `:refer` usage for frequently used functions
+- Logical namespace hierarchy (`api.db`, `api.main`, `compiler.main`)
+
+#### 2. **Threading and Data Access** (api/db.clj lines 12-16, api/main.clj lines 23-25)
+```clojure
+(-> base-spec (:ports) (profile))
+(-> u/configs (:api-server) (:http-port))
+```
+- Proper use of threading macros for nested data access
+
+#### 3. **Error Handling** (api/db.clj)
+- Consistent try-catch patterns across all database functions
+- Structured logging with namespaced keywords (`:debug`, `::function-addition-failed`)
+- Re-throwing exceptions after logging (preserving stack traces)
+
+#### 4. **Testing** (api/db_test.clj)
+- Good use of `use-fixtures` for test setup/teardown
+- Dynamic binding with `^:dynamic *datasource*` for test context
+- Clear test organization with `testing` blocks
+
+#### 5. **Configuration Management** (utils.clj)
+- Using `aero` for configuration with environment-based profiles
+- `defonce` for configs to prevent reloading issues during REPL development
+
+#### 6. **Dependency Injection Pattern** (api/db.clj)
+- Functions accept `datasource` as parameter rather than using global state
+- Makes testing easier and more explicit
+
+### ⚠️ **Non-Idiomatic or Questionable Practices**
+
+#### 1. **The `prog1` Macro** (utils.clj lines 42-48)
+```clojure
+(defmacro prog1
+  ""Evaluate expr1, then evaluate and return the value of exprs...
+   Returns the value of expr1.""
+  [expr1 & exprs]
+  `(let [result# ~expr1]
+     ~@exprs
+     result#))
+```
+**Issue**: This is a Common Lisp idiom, not idiomatic Clojure
+- Clojure prefers explicit `let` bindings for clarity
+- The `doto` macro is the Clojure equivalent for side effects, but for pure values, explicit `let` is clearer
+- Used throughout api/db.clj for all database operations
+
+**More Idiomatic Alternative**:
+```clojure
+(defn get-functions [datasource]
+  (try
+    (let [result (execute! datasource [""SELECT * FROM FUNCTIONS;""])]
+      (log! :debug ""Functions retrieved successfully"")
+      result)
+    (catch Exception e
+      (error! ::function-retrieval-failed e)
+      (throw e))))
+```
+
+#### 2. **Overly Generic Exception Handling** (all functions in api/db.clj)
+```clojure
+(catch Exception e ...)
+```
+**Issue**: Catching broad `Exception` instead of specific exceptions
+- Masks different error types
+- More idiomatic to catch specific exceptions or use `ex-info` for custom errors
+
+#### 3. **Private Function Naming** (api/main.clj)
+```clojure
+(defn- root-handler [_req]
+(defn- status-handler [_req]
+```
+**Issue**: These handlers are used in a public `def app` router
+- In Clojure, private functions shouldn't be referenced by public vars
+- Either make them public or inline them in the router definition
+
+**More Idiomatic**:
+```clojure
+(def app
+  (ring/ring-handler
+   (ring/router 
+     [[""/"" {:get (fn [_req] 
+                   {:status 200 :body ""Sentinel Body""
+                    :headers {""Content-Type"" ""text/html""}})}]
+      [""/status"" {:get (fn [_req]
+                        {:status 200 :body ""OK""
+                         :headers {""Content-Type"" ""text/html""}})}]])))
+```
+
+#### 4. **Config Reading at Namespace Load** (utils.clj line 40)
+```clojure
+(defonce configs (read-configs))
+```
+**Issue**: Reading configuration at namespace load time
+- Makes testing harder (can't easily override configs)
+- Side effects at namespace load are generally discouraged
+- Better to use a function or system component
+
+**More Idiomatic**: Use component/integrant/mount for stateful resources
+
+#### 5. **Missing Arity Checks** (utils.clj)
+```clojure
+(defn env-predicated-nrepl-init [configs component]
+  ...)
+```
+**Issue**: No validation of inputs or pre/post conditions
+- Idiomatic Clojure often uses spec, schema, or at least pre/post conditions for validation
+
+#### 6. **Inconsistent Refer Usage** (api/db.clj)
+```clojure
+(:require
+ [next.jdbc :as jdbc :refer [execute! get-datasource]]
+ [next.jdbc.sql :as sql :refer [insert!]]
+ ...)
+```
+**Minor Issue**: Mix of aliased and referred functions
+- `execute!` is referred but also available via `jdbc/execute!`
+- Community prefers consistent aliasing over selective `:refer` (except for test macros)
+
+### 🔍 **Additional Observations**
+
+#### Positive:
+- Uses modern libraries (next.jdbc, reitit, http-kit)
+- Good separation of concerns (db, api, utils)
+- Test coverage present
+- Uses tools.deps over Leiningen (more modern approach)
+- Babashka tasks for development workflow
+
+#### Could Improve:
+- No spec definitions for data validation
+- Empty `compiler.main` namespace
+- Hardcoded SQL strings (could use HoneySQL or similar)
+- No connection pooling configuration visible
+
+### **Summary**
+
+The code is **mostly idiomatic** with good structure and modern tooling, but has a few notable anti-patterns:
+
+**Score: 7/10**
+
+**Main Issues:**
+1. The `prog1` macro is the biggest non-idiomatic element (Common Lisp influence)
+2. Broad exception catching
+3. Configuration loaded at namespace load time
+4. Private functions referenced by public vars
+
+**Strengths:**
+- Clean namespace organization
+- Good testing practices
+- Proper dependency injection
+- Modern library choices
+- Structured logging
+
+The code would benefit most from removing the `prog1` macro and using explicit `let` bindings, which is the standard Clojure approach."
+2d177eef-1584-4a89-8371-949c86ea8639,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,"Can this be run on a laptop, what kind of sensor data does it fetch? What act...",yes,yes,yes,"- Correctly identifies this as a Home Assistant custom integration, not standalone
+- Accurately lists BLE hardware requirements for laptop usage
+- Properly identifies only battery percentage as current sensor data
+- Provides specific file/class references: sensor.py, BatterySensor, protocol.py, DeviceInfo
+- Cites manufacturer ID (46517) and device name patterns (EF-*, R33*)
+- Includes relevant README warning about limited scope
+- Structure is clear with headers and bullet points
+- Minor: Question appears truncated (""What act..."") but answer addresses reasonable interpretation
+- Good use of emojis and formatting for scannability
+- Distinguishes between what devices theoretically support vs. what's implemented","Based on my analysis of the codebase, I can now answer your questions:
+
+## Can this be run on a laptop?
+
+**Yes, with caveats:**
+
+This is a **Home Assistant custom integration** that uses Bluetooth Low Energy (BLE). To run it:
+
+1. **You need Home Assistant** - This is not a standalone application. It's a custom component for Home Assistant (a home automation platform).
+
+2. **Bluetooth hardware required** - Your laptop needs:
+   - Bluetooth Low Energy (BLE) support
+   - The device must be within Bluetooth range (typically 10-30 meters)
+   - Home Assistant must be able to access the Bluetooth adapter
+
+3. **Dependencies**:
+   - `bluetooth_adapters` (Home Assistant component)
+   - BLE communication libraries (bleak, bleak_retry_connector)
+
+## What sensor data does it fetch?
+
+**Currently very limited - only battery percentage:**
+
+According to the README and code analysis:
+
+### Supported Devices:
+- **RIVER_2** (1 sensor)
+- **RIVER_3** (1 sensor)  
+- **DELTA_2** (1 sensor)
+
+### Data Fetched:
+- ✅ **Battery Level** (percentage) - This is the ONLY sensor currently implemented
+- Device serial number
+- Device model identification
+- RSSI (signal strength)
+
+**Source evidence:**
+- `sensor.py` only implements `BatterySensor` class
+- `protocol.py` parses: serial number, battery percentage, and model type
+- `DeviceInfo` dataclass (models.py) only includes: name, serial, model, battery
+
+### How it works:
+1. **Passive listening**: Monitors BLE advertisements from EcoFlow devices (devices with names starting with ""EF-*"" or ""R33*"")
+2. **Manufacturer data parsing**: Extracts battery percentage from manufacturer data (ID: 46517)
+3. **Active polling**: Can connect to the device every 30+ seconds for updates (though current implementation mainly uses passive advertisements)
+
+### Note from README:
+> ""⚠️ Originally developed for personal use without a goal to cover all available device attributes and ecoflow devices.""
+
+This explains why only battery data is currently extracted, even though EcoFlow devices likely broadcast or support querying much more data (power input/output, temperature, etc.)."
+2d177eef-1584-4a89-8371-949c86ea8639,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,"Can this be run on a laptop, what kind of sensor data does it fetch? What act...",yes,yes,yes,"- Correctly identifies this as a Home Assistant custom integration, not standalone
+- Accurately lists BLE hardware requirements for laptop usage
+- Properly identifies only battery percentage as current sensor data
+- Provides specific file/class references: sensor.py, BatterySensor, protocol.py, DeviceInfo
+- Cites manufacturer ID (46517) and device name patterns (EF-*, R33*)
+- Includes relevant README warning about limited scope
+- Structure is clear with headers and bullet points
+- Minor: Question appears truncated (""What act..."") but answer addresses reasonable interpretation
+- Good use of emojis and formatting for scannability
+- Distinguishes between what devices theoretically support vs. what's implemented","Based on my analysis of the codebase, I can now answer your questions:
+
+## Can this be run on a laptop?
+
+**Yes, with caveats:**
+
+This is a **Home Assistant custom integration** that uses Bluetooth Low Energy (BLE). To run it:
+
+1. **You need Home Assistant** - This is not a standalone application. It's a custom component for Home Assistant (a home automation platform).
+
+2. **Bluetooth hardware required** - Your laptop needs:
+   - Bluetooth Low Energy (BLE) support
+   - The device must be within Bluetooth range (typically 10-30 meters)
+   - Home Assistant must be able to access the Bluetooth adapter
+
+3. **Dependencies**:
+   - `bluetooth_adapters` (Home Assistant component)
+   - BLE communication libraries (bleak, bleak_retry_connector)
+
+## What sensor data does it fetch?
+
+**Currently very limited - only battery percentage:**
+
+According to the README and code analysis:
+
+### Supported Devices:
+- **RIVER_2** (1 sensor)
+- **RIVER_3** (1 sensor)  
+- **DELTA_2** (1 sensor)
+
+### Data Fetched:
+- ✅ **Battery Level** (percentage) - This is the ONLY sensor currently implemented
+- Device serial number
+- Device model identification
+- RSSI (signal strength)
+
+**Source evidence:**
+- `sensor.py` only implements `BatterySensor` class
+- `protocol.py` parses: serial number, battery percentage, and model type
+- `DeviceInfo` dataclass (models.py) only includes: name, serial, model, battery
+
+### How it works:
+1. **Passive listening**: Monitors BLE advertisements from EcoFlow devices (devices with names starting with ""EF-*"" or ""R33*"")
+2. **Manufacturer data parsing**: Extracts battery percentage from manufacturer data (ID: 46517)
+3. **Active polling**: Can connect to the device every 30+ seconds for updates (though current implementation mainly uses passive advertisements)
+
+### Note from README:
+> ""⚠️ Originally developed for personal use without a goal to cover all available device attributes and ecoflow devices.""
+
+This explains why only battery data is currently extracted, even though EcoFlow devices likely broadcast or support querying much more data (power input/output, temperature, etc.)."
+2d177eef-1584-4a89-8371-949c86ea8639,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,"Can this be run on a laptop, what kind of sensor data does it fetch? What act...",yes,yes,yes,"- Correctly identifies this as a Home Assistant custom integration, not standalone
+- Accurately lists BLE hardware requirements for laptop usage
+- Properly identifies only battery percentage as current sensor data
+- Provides specific file/class references: sensor.py, BatterySensor, protocol.py, DeviceInfo
+- Cites manufacturer ID (46517) and device name patterns (EF-*, R33*)
+- Includes relevant README warning about limited scope
+- Structure is clear with headers and bullet points
+- Minor: Question appears truncated (""What act..."") but answer addresses reasonable interpretation
+- Good use of emojis and formatting for scannability
+- Distinguishes between what devices theoretically support vs. what's implemented","Based on my analysis of the codebase, I can now answer your questions:
+
+## Can this be run on a laptop?
+
+**Yes, with caveats:**
+
+This is a **Home Assistant custom integration** that uses Bluetooth Low Energy (BLE). To run it:
+
+1. **You need Home Assistant** - This is not a standalone application. It's a custom component for Home Assistant (a home automation platform).
+
+2. **Bluetooth hardware required** - Your laptop needs:
+   - Bluetooth Low Energy (BLE) support
+   - The device must be within Bluetooth range (typically 10-30 meters)
+   - Home Assistant must be able to access the Bluetooth adapter
+
+3. **Dependencies**:
+   - `bluetooth_adapters` (Home Assistant component)
+   - BLE communication libraries (bleak, bleak_retry_connector)
+
+## What sensor data does it fetch?
+
+**Currently very limited - only battery percentage:**
+
+According to the README and code analysis:
+
+### Supported Devices:
+- **RIVER_2** (1 sensor)
+- **RIVER_3** (1 sensor)  
+- **DELTA_2** (1 sensor)
+
+### Data Fetched:
+- ✅ **Battery Level** (percentage) - This is the ONLY sensor currently implemented
+- Device serial number
+- Device model identification
+- RSSI (signal strength)
+
+**Source evidence:**
+- `sensor.py` only implements `BatterySensor` class
+- `protocol.py` parses: serial number, battery percentage, and model type
+- `DeviceInfo` dataclass (models.py) only includes: name, serial, model, battery
+
+### How it works:
+1. **Passive listening**: Monitors BLE advertisements from EcoFlow devices (devices with names starting with ""EF-*"" or ""R33*"")
+2. **Manufacturer data parsing**: Extracts battery percentage from manufacturer data (ID: 46517)
+3. **Active polling**: Can connect to the device every 30+ seconds for updates (though current implementation mainly uses passive advertisements)
+
+### Note from README:
+> ""⚠️ Originally developed for personal use without a goal to cover all available device attributes and ecoflow devices.""
+
+This explains why only battery data is currently extracted, even though EcoFlow devices likely broadcast or support querying much more data (power input/output, temperature, etc.)."
+71a0f12e-9b3e-4f6c-a794-f4d636e5d87b,https://github.com/openai/codex.git,7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad,"Does the harness have special prompting for its ""pragmatic"" and ""friendly"" pe...",yes,yes,yes,"- Directly answers the question with clear affirmation
+- Provides specific file paths for personality templates
+- Highlights key behavioral differences between friendly and pragmatic personalities with concrete examples
+- Cites multiple relevant evidence sources (template files, configuration files, README)
+- Well-structured with headers and bullet points for easy scanning
+- Includes implementation details (how personalities are applied via config/API)
+- Evidence spans multiple parts of codebase (templates, protocol, app-server) showing thorough understanding
+- Minor: Could have included actual code snippets from cited line numbers to strengthen evidence
+- Overall: Comprehensive, well-supported answer with clear narrative","Yes! **The harness does have special prompting for ""pragmatic"" and ""friendly"" personalities.** Here's what I found:
+
+## Personality System
+
+The harness supports three personality types: **""friendly""**, **""pragmatic""**, and **""none""**.
+
+### Separate Template Files
+
+Each personality has its own dedicated template:
+
+- **Friendly**: `codex-rs/core/templates/personalities/gpt-5.2-codex_friendly.md`
+- **Pragmatic**: `codex-rs/core/templates/personalities/gpt-5.2-codex_pragmatic.md`
+
+### Key Differences
+
+**Friendly Personality:**
+- Optimizes for **team morale and being a supportive teammate**
+- Communication is **warm, encouraging, and conversational**
+- Uses ""we"" and ""let's"" language
+- **NEVER curt or dismissive**
+- Patient and enjoyable collaborator
+- Focuses on empathy, collaboration, and ownership
+- Escalates ""gently and deliberately""
+
+**Pragmatic Personality:**
+- **Deeply pragmatic, effective software engineer**
+- Communication is **concise and efficient**
+- Focuses on clarity, pragmatism, and rigor
+- Great work is acknowledged but **avoids cheerleading or motivational language**
+- Expects technical arguments to be coherent and defensible
+- May **challenge the user to raise their technical bar** but never patronizes
+
+### How It's Applied
+
+The personality templates are injected into model prompts through the `personality_friendly` and `personality_pragmatic` fields in model configurations (`codex-rs/protocol/src/openai_models.rs`). Models like GPT-5.2 have these templates included in their configuration (`codex-rs/core/src/models_manager/model_info.rs`).
+
+Users can select personalities via:
+- Configuration: `personality = ""friendly""` or `personality = ""pragmatic""` in `config.toml`
+- API parameters: Thread/turn start params include a `personality` field
+
+Evidence:
+- `codex-rs/core/templates/personalities/gpt-5.2-codex_friendly.md`
+- `codex-rs/core/templates/personalities/gpt-5.2-codex_pragmatic.md`
+- `codex-rs/protocol/src/openai_models.rs:324-340`
+- `codex-rs/app-server/README.md:151`"
+71a0f12e-9b3e-4f6c-a794-f4d636e5d87b,https://github.com/openai/codex.git,7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad,"Does the harness have special prompting for its ""pragmatic"" and ""friendly"" pe...",yes,yes,yes,"- Directly answers the question with clear affirmation
+- Provides specific file paths for personality templates
+- Highlights key behavioral differences between friendly and pragmatic personalities with concrete examples
+- Cites multiple relevant evidence sources (template files, configuration files, README)
+- Well-structured with headers and bullet points for easy scanning
+- Includes implementation details (how personalities are applied via config/API)
+- Evidence spans multiple parts of codebase (templates, protocol, app-server) showing thorough understanding
+- Minor: Could have included actual code snippets from cited line numbers to strengthen evidence
+- Overall: Comprehensive, well-supported answer with clear narrative","Yes! **The harness does have special prompting for ""pragmatic"" and ""friendly"" personalities.** Here's what I found:
+
+## Personality System
+
+The harness supports three personality types: **""friendly""**, **""pragmatic""**, and **""none""**.
+
+### Separate Template Files
+
+Each personality has its own dedicated template:
+
+- **Friendly**: `codex-rs/core/templates/personalities/gpt-5.2-codex_friendly.md`
+- **Pragmatic**: `codex-rs/core/templates/personalities/gpt-5.2-codex_pragmatic.md`
+
+### Key Differences
+
+**Friendly Personality:**
+- Optimizes for **team morale and being a supportive teammate**
+- Communication is **warm, encouraging, and conversational**
+- Uses ""we"" and ""let's"" language
+- **NEVER curt or dismissive**
+- Patient and enjoyable collaborator
+- Focuses on empathy, collaboration, and ownership
+- Escalates ""gently and deliberately""
+
+**Pragmatic Personality:**
+- **Deeply pragmatic, effective software engineer**
+- Communication is **concise and efficient**
+- Focuses on clarity, pragmatism, and rigor
+- Great work is acknowledged but **avoids cheerleading or motivational language**
+- Expects technical arguments to be coherent and defensible
+- May **challenge the user to raise their technical bar** but never patronizes
+
+### How It's Applied
+
+The personality templates are injected into model prompts through the `personality_friendly` and `personality_pragmatic` fields in model configurations (`codex-rs/protocol/src/openai_models.rs`). Models like GPT-5.2 have these templates included in their configuration (`codex-rs/core/src/models_manager/model_info.rs`).
+
+Users can select personalities via:
+- Configuration: `personality = ""friendly""` or `personality = ""pragmatic""` in `config.toml`
+- API parameters: Thread/turn start params include a `personality` field
+
+Evidence:
+- `codex-rs/core/templates/personalities/gpt-5.2-codex_friendly.md`
+- `codex-rs/core/templates/personalities/gpt-5.2-codex_pragmatic.md`
+- `codex-rs/protocol/src/openai_models.rs:324-340`
+- `codex-rs/app-server/README.md:151`"
+15fa121a-175d-4c4a-8c27-7b5134e13178,https://github.com/rabits/ha-ef-ble.git,1f50e8fee93803ef187aa651aee680cd51111b63,"Give me python code to print all data it receives, using M1 air. I have insta...",no,no,yes,"- Answer does not provide the requested Python code
+- Instead asks for clarification, which is reasonable given the incomplete question
+- However, the evaluator's job is to assess relevance to the question as asked
+- The question, though incomplete, asks for code to ""print all data it receives""
+- A helpful answer could have provided generic examples (e.g., stdin reading, socket data, API responses) while noting assumptions
+- No evidence from codebase provided or needed (question is generic, not repository-specific)
+- Answer is well-structured and readable
+- The clarifying questions are logical but don't fulfill the core request
+- For incomplete questions, best practice would be: provide generic solution + note what's assumed + ask for clarification","I'd be happy to help you with Python code, but your message seems to be cut off. You mentioned:
+- You want Python code to print all data it receives
+- You're using an M1 Air (MacBook Air with M1 chip)
+- Something about ""insta..."" (Instagram? Installation? Something else?)
+
+Could you please complete your question? For example:
+- What kind of data are you trying to receive? (API responses, user input, network data, file data, etc.)
+- What is ""insta..."" referring to?
+- Is this related to a specific application or service?
+
+This will help me provide you with the most relevant code for your needs."
+c88a429b-24e8-4613-aadf-d2be9b7ea097,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,Is there a branch summary feature for the session tree?,yes,yes,yes,"- Answer directly addresses the yes/no question upfront
+- Strong evidence: specific file paths, line numbers, code snippets, interface definitions
+- Well-structured with clear sections (Overview, Evidence, How it works)
+- Code snippets are properly formatted and contextual
+- Evidence spans multiple layers: types, commands, storage, UI components
+- The ""How it works"" section ties everything together coherently
+- Technical details are accurate and verifiable (file paths, line numbers match claimed locations)
+- Good progression from definition → implementation → usage
+- Minor: Could be slightly more concise in places, but doesn't hurt clarity","Perfect! Now I have a complete picture. Let me provide a comprehensive answer:
+
+## Yes, there is a branch summary feature for the session tree.
+
+Based on the codebase analysis, here's what I found:
+
+### **Feature Overview**
+
+The branch summary feature allows creating summaries when navigating between different branches in the session tree. This is part of the tree navigation system.
+
+### **Evidence from the code:**
+
+1. **Type Definition** (`packages/shared/src/index.ts`):
+   - `BranchSummaryMessage` interface at line 100-104 with fields: `role`, `summary`, `fromId`, `timestamp`
+   - Used to represent branch summaries in the message stream
+
+2. **Navigate Tree Command** (`packages/shared/src/index.ts:262`):
+   ```typescript
+   | { id?: string; type: ""navigate_tree""; targetId: string; summarize?: boolean }
+   ```
+   The `navigate_tree` command has an optional `summarize` parameter that enables branch summary generation.
+
+3. **Session File Storage** (`packages/backend/src/session-utils.ts:54-57`):
+   ```typescript
+   interface BranchSummaryEntry extends SessionEntryBase {
+     type: ""branch_summary"";
+     summary: string;
+     fromId: string;
+   }
+   ```
+   Branch summaries are stored as entries in the session file.
+
+4. **Tree Visualization** (`packages/backend/src/session-utils.ts:364`):
+   Branch summary entries are recognized and displayed in the session tree with type ""branch"".
+
+5. **UI Component** (`packages/frontend/src/components/chat/BranchSummary.tsx`):
+   A dedicated component renders branch summaries with a blue border, 🌿 icon, and ""Branch Summary"" label.
+
+### **How it works:**
+
+When navigating the session tree with the `navigate_tree` command and `summarize: true`, the system creates a summary of the divergent branch being switched from, allowing users to understand what happened on that alternative path without losing context."
+c88a429b-24e8-4613-aadf-d2be9b7ea097,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,Is there a branch summary feature for the session tree?,yes,yes,yes,"- Answer directly addresses the yes/no question upfront
+- Strong evidence: specific file paths, line numbers, code snippets, interface definitions
+- Well-structured with clear sections (Overview, Evidence, How it works)
+- Code snippets are properly formatted and contextual
+- Evidence spans multiple layers: types, commands, storage, UI components
+- The ""How it works"" section ties everything together coherently
+- Technical details are accurate and verifiable (file paths, line numbers match claimed locations)
+- Good progression from definition → implementation → usage
+- Minor: Could be slightly more concise in places, but doesn't hurt clarity","Perfect! Now I have a complete picture. Let me provide a comprehensive answer:
+
+## Yes, there is a branch summary feature for the session tree.
+
+Based on the codebase analysis, here's what I found:
+
+### **Feature Overview**
+
+The branch summary feature allows creating summaries when navigating between different branches in the session tree. This is part of the tree navigation system.
+
+### **Evidence from the code:**
+
+1. **Type Definition** (`packages/shared/src/index.ts`):
+   - `BranchSummaryMessage` interface at line 100-104 with fields: `role`, `summary`, `fromId`, `timestamp`
+   - Used to represent branch summaries in the message stream
+
+2. **Navigate Tree Command** (`packages/shared/src/index.ts:262`):
+   ```typescript
+   | { id?: string; type: ""navigate_tree""; targetId: string; summarize?: boolean }
+   ```
+   The `navigate_tree` command has an optional `summarize` parameter that enables branch summary generation.
+
+3. **Session File Storage** (`packages/backend/src/session-utils.ts:54-57`):
+   ```typescript
+   interface BranchSummaryEntry extends SessionEntryBase {
+     type: ""branch_summary"";
+     summary: string;
+     fromId: string;
+   }
+   ```
+   Branch summaries are stored as entries in the session file.
+
+4. **Tree Visualization** (`packages/backend/src/session-utils.ts:364`):
+   Branch summary entries are recognized and displayed in the session tree with type ""branch"".
+
+5. **UI Component** (`packages/frontend/src/components/chat/BranchSummary.tsx`):
+   A dedicated component renders branch summaries with a blue border, 🌿 icon, and ""Branch Summary"" label.
+
+### **How it works:**
+
+When navigating the session tree with the `navigate_tree` command and `summarize: true`, the system creates a summary of the divergent branch being switched from, allowing users to understand what happened on that alternative path without losing context."
+948fcd99-6b51-42e3-b1c2-f060f2ce0a83,https://github.com/thedotmack/claude-mem.git,1341e93fcab15b9caf48bc947d8521b4a97515d8,How does this work?,no,no,yes,"- Question 'How does this work?' is too vague without repo context
+- Answer assumes question is about 'Claude-Mem' but question doesn't mention it
+- No evidence provided that this codebase is actually Claude-Mem
+- Claims about specific features (5 hooks, port 37777, 10 endpoints, 4 MCP tools) lack file paths or code references
+- Technical stack claims (Bun, SQLite, Chroma, uv) not verified with evidence
+- Progressive disclosure pattern and token savings numbers (10x) appear fabricated
+- Answer structure is clear with good formatting and logical flow
+- Would need to verify repo actually matches Claude-Mem description
+- Appropriate response would ask for clarification: 'What specifically would you like to know about?'","Now I can provide you with a comprehensive explanation of how Claude-Mem works!
+
+# How Claude-Mem Works
+
+**Claude-Mem** is a persistent memory compression system for Claude Code that preserves context across sessions. Here's how it operates:
+
+## Core Architecture
+
+### 1. **Lifecycle Hooks System**
+Claude-Mem uses **5 lifecycle hooks** that intercept key moments in your Claude Code sessions:
+- **SessionStart** - Triggered when a session begins
+- **UserPromptSubmit** - Captures user inputs
+- **PostToolUse** - Monitors tool execution and results
+- **Stop** - Handles session pauses
+- **SessionEnd** - Processes session completion
+
+### 2. **Memory Capture & Storage**
+- **Automatic Observation**: Hooks capture tool usage, code changes, decisions, and context
+- **SQLite Database**: Stores sessions, observations, and semantic summaries
+- **Chroma Vector Database**: Enables hybrid semantic + keyword search for intelligent retrieval
+
+### 3. **Worker Service**
+- **Bun-managed HTTP API** on port 37777
+- **Web Viewer UI** for real-time memory inspection
+- **10 Search Endpoints** for querying memory
+- Handles compression, summarization, and context injection
+
+### 4. **Progressive Disclosure**
+Instead of overwhelming Claude with all past context, it uses a **3-layer retrieval pattern**:
+
+**Layer 1: Index Search** (~50-100 tokens/result)
+```
+search(query=""bug fix"", limit=10) → Returns compact IDs and snippets
+```
+
+**Layer 2: Timeline Context**
+```
+timeline(observation_id=123) → Shows chronological context around event
+```
+
+**Layer 3: Full Details** (~500-1,000 tokens/result)
+```
+get_observations(ids=[123, 456]) → Fetches complete details only when needed
+```
+
+This achieves **~10x token savings** by filtering before fetching full context.
+
+### 5. **MCP Search Tools**
+Provides 4 MCP (Model Context Protocol) tools that Claude can use:
+- `search` - Query memory index
+- `timeline` - Get chronological context
+- `get_observations` - Fetch full observation details
+- `__IMPORTANT` - Workflow documentation
+
+## Data Flow
+
+1. **Session starts** → SessionStart hook retrieves relevant past context
+2. **User prompts** → UserPromptSubmit hook captures input
+3. **Tools execute** → PostToolUse hook observes results and decisions
+4. **Observations stored** → Worker compresses and summarizes to SQLite/Chroma
+5. **Next session** → Relevant memories automatically injected via hooks
+
+## Key Features
+
+- **Privacy Control**: `<private>` tags exclude sensitive content
+- **Citations**: Reference past observations by ID
+- **Context Configuration**: Fine-grained control over what gets injected
+- **Beta Channel**: Experimental features like ""Endless Mode"" (biomimetic memory for extended sessions)
+
+## Technical Stack
+
+- **TypeScript** - Main implementation language
+- **Bun** - JavaScript runtime and process manager
+- **SQLite 3** - Persistent storage with FTS5 full-text search
+- **Chroma** - Vector database for semantic search
+- **uv** - Python package manager (for vector search)
+
+The system operates **automatically** with no manual intervention required - just install the plugin and Claude maintains continuity of knowledge across sessions!"
