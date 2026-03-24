@@ -252,7 +252,7 @@ describe("Session", () => {
 				createMockConfig({
 					stream: customStream,
 					streamSimple: customStreamSimple,
-					thinking: { level: "adaptive" },
+					thinking: { type: "adaptive" },
 				}),
 			);
 
@@ -263,7 +263,28 @@ describe("Session", () => {
 			expect(capturedOptions).toEqual({ thinkingEnabled: true });
 		});
 
-		test("level-based thinking uses streamSimple() with reasoning option", async () => {
+		test("adaptive thinking with effort passes both to stream()", async () => {
+			let capturedOptions: unknown;
+			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					stream: customStream,
+					thinking: { type: "adaptive", effort: "medium" },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(capturedOptions).toEqual({ thinkingEnabled: true, effort: "medium" });
+		});
+
+		test("effort-based thinking uses streamSimple() with reasoning option", async () => {
 			let capturedOptions: unknown;
 			let streamCalled = false;
 			let streamSimpleCalled = false;
@@ -283,7 +304,7 @@ describe("Session", () => {
 				createMockConfig({
 					stream: customStream,
 					streamSimple: customStreamSimple,
-					thinking: { level: "high" },
+					thinking: { effort: "high" },
 				}),
 			);
 
@@ -294,7 +315,7 @@ describe("Session", () => {
 			expect(capturedOptions).toEqual({ reasoning: "high" });
 		});
 
-		test("level-based thinking passes budgetOverrides as thinkingBudgets", async () => {
+		test("effort-based thinking passes budgetOverrides as thinkingBudgets", async () => {
 			let capturedOptions: unknown;
 			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
 				capturedOptions = options;
@@ -306,7 +327,7 @@ describe("Session", () => {
 				repo,
 				createMockConfig({
 					streamSimple: customStreamSimple,
-					thinking: { level: "medium", budgetOverrides: { medium: 8000 } },
+					thinking: { effort: "medium", budgetOverrides: { medium: 8000 } },
 				}),
 			);
 

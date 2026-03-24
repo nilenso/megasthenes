@@ -266,14 +266,21 @@ export class Session {
 		const thinking = this.#config.thinking;
 		if (!thinking) return { streamFn: this.#stream };
 
-		if (thinking.level === "adaptive") {
-			return { streamFn: this.#stream, streamOptions: { thinkingEnabled: true } };
+		if (thinking.type === "adaptive") {
+			return {
+				streamFn: this.#stream,
+				streamOptions: {
+					thinkingEnabled: true,
+					...(thinking.effort && { effort: thinking.effort }),
+				},
+			};
 		}
 
+		// Effort-based (cross-provider) — use streamSimple which maps to native format
 		return {
 			streamFn: this.#streamSimple,
 			streamOptions: {
-				reasoning: thinking.level,
+				reasoning: thinking.effort,
 				...(thinking.budgetOverrides && { thinkingBudgets: thinking.budgetOverrides }),
 			},
 		};

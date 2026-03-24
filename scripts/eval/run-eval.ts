@@ -95,7 +95,7 @@ async function runEval(inputPath: string, thinking: ThinkingConfig | undefined):
 	console.log(`Reading dataset from: ${inputPath}`);
 	console.log(`Found ${rows.length} rows to evaluate`);
 	if (thinking) {
-		console.log(`Thinking: ${thinking.level}`);
+		console.log(`Thinking: ${thinking.type === "adaptive" ? "adaptive" : `effort=${thinking.effort}`}`);
 	}
 	console.log();
 
@@ -241,12 +241,13 @@ async function runEval(inputPath: string, thinking: ThinkingConfig | undefined):
 }
 
 // CLI entry point
-const VALID_LEVELS = new Set<string>(["minimal", "low", "medium", "high", "xhigh", "adaptive"]);
+const VALID_EFFORTS = new Set<string>(["minimal", "low", "medium", "high", "xhigh"]);
 
 const { values, positionals } = parseArgs({
 	args: Bun.argv,
 	options: {
 		thinking: { type: "string", default: "" },
+		effort: { type: "string", default: "" },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -255,20 +256,26 @@ const { values, positionals } = parseArgs({
 const inputPath = positionals[2]; // skip bun executable and script path
 
 if (!inputPath) {
-	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv> [--thinking <level>]");
-	console.error("  --thinking adaptive   model decides effort (Anthropic-only)");
-	console.error("  --thinking <level>    minimal, low, medium, high, xhigh, adaptive");
+	console.error("Usage: bun run eval/run-eval.ts <path-to-dataset.csv> [--thinking adaptive] [--effort <level>]");
+	console.error("  --thinking adaptive   model decides when/how much to think (Anthropic 4.6 only)");
+	console.error("  --effort <level>      minimal, low, medium, high, xhigh (all providers)");
 	process.exit(1);
 }
 
 let thinking: ThinkingConfig | undefined;
-if (values.thinking) {
-	const level = values.thinking;
-	if (!VALID_LEVELS.has(level)) {
-		console.error(`Invalid level: "${level}". Must be one of: ${[...VALID_LEVELS].join(", ")}`);
-		process.exit(1);
-	}
-	thinking = { level: level as ThinkingLevel | "adaptive" };
+const effort = values.effort;
+if (effort && !VALID_EFFORTS.has(effort)) {
+	console.error(`Invalid --effort value: "${effort}". Must be one of: ${[...VALID_EFFORTS].join(", ")}`);
+	process.exit(1);
+}
+
+if (values.thinking === "adaptive") {
+	thinking = { type: "adaptive", ...(effort && { effort: effort as ThinkingLevel }) };
+} else if (values.thinking) {
+	console.error(`Invalid --thinking value: "${values.thinking}". Only "adaptive" is supported.`);
+	process.exit(1);
+} else if (effort) {
+	thinking = { effort: effort as ThinkingLevel };
 }
 
 await runEval(inputPath, thinking);

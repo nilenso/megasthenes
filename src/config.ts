@@ -13,20 +13,25 @@ import type { ThinkingBudgets, ThinkingLevel } from "@mariozechner/pi-ai";
 /**
  * Configuration for reasoning/thinking.
  *
- * - ThinkingLevel ("minimal"|"low"|"medium"|"high"|"xhigh"): Works across all providers
- *   via streamSimple(). Each provider translates to its native format.
- * - "adaptive": Model decides effort per-request (Anthropic-only, uses stream() directly).
+ * - Effort-based (cross-provider): Set an effort level, mapped to each provider's native
+ *   format by pi-ai's streamSimple() (e.g., reasoning.effort for OpenAI, thinking for Anthropic/Google).
+ * - Adaptive (Anthropic 4.6 only): Model decides when/how much to think.
+ *   Uses pi-ai's stream() with thinkingEnabled.
  */
-export interface ThinkingConfig {
-	/**
-	 * Thinking level.
-	 * - ThinkingLevel: Works across all providers via streamSimple().
-	 * - "adaptive": Model decides effort per-request (Anthropic-only, uses stream() directly).
-	 */
-	level: ThinkingLevel | "adaptive";
-	/** Custom token budgets per level (for token-based providers like older Claude, Gemini). */
-	budgetOverrides?: ThinkingBudgets;
-}
+export type ThinkingConfig =
+	| {
+			/** Model decides when/how much to think (Anthropic 4.6 models only). Uses stream(). */
+			type: "adaptive";
+			/** Optional effort guidance for adaptive mode (defaults to "high" in the Anthropic API). */
+			effort?: ThinkingLevel;
+	  }
+	| {
+			type?: undefined;
+			/** Effort level. Mapped to each provider's native format by streamSimple(). */
+			effort: ThinkingLevel;
+			/** Custom token budgets per level (for token-based providers like older Claude, Gemini). */
+			budgetOverrides?: ThinkingBudgets;
+	  };
 
 export type { ThinkingBudgets, ThinkingLevel };
 
