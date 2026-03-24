@@ -1,0 +1,16 @@
+id,repository,commit_id,question
+8,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,What is this repo about?
+9,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,Explain the architecture
+16,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,What's the difference between `read_cache()` and `read_cache_preload()`? When to use one over the other?
+26,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,How can I quickly setup goose and get it up and running locally
+27,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,What are the trade-offs with choosing either Redis or RabbitMQ as the broker?
+23,https://github.com/nilenso/ask-forge.git,da4991248245786679d58c6d7d3aa3f455318ee5,Give me a glossary of project specific terms
+25,https://github.com/nilenso/context-viewer.git,3e14474fe8022db45923b71184231d8b969928bc,what is the input data format required for parsing? Specifically for a jsonl file
+38,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,Is there a branch summary feature for the session tree?
+12,https://github.com/charmbracelet/glow.git,752de97c5a331af0eed0c7b417462621bffa533e,can I use this tool to render any markdown output from the pi coding agent?
+77,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"if a model generates a perfect OCaml solution but wraps it in 6 code blocks with a paragraph of explanation after, what's the final reward?"
+48,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"What optimizer is used on macOS vs Linux for GRPO training, and where is this decision made?"
+42,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the default LoRA rank and how do I change it?
+59,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what is the full lifecycle of a single training step from prompt to reward computation.
+96,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,Can you walk me through `perform-async` from API call to actually applying the target function?
+78,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"can a completion ever get a non-zero compile score but a zero type check score?"

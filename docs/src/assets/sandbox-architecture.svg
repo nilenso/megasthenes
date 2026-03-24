@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 697.2935 930.4" width="697.2935" height="930.4" style="--bg:#ffffff;--fg:#1f2328;--line:#d1d9e0;--accent:#0969da;--muted:#59636e;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="docker" data-label="Docker / Podman Container · gVisor runtime">
+  <rect x="40" y="284.1" width="617.2935" height="521.4" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="40" y="284.1" width="617.2935" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="52" y="298.1" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Docker / Podman Container · gVisor runtime</text>
+</g>
+<polyline class="edge" data-from="client" data-to="sandbox_client" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.08900000000006,76.9 298.08900000000006,124.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="docker" data-to="gvisor" data-style="dotted" data-arrow-start="false" data-arrow-end="false" points="391.5195,805.5 391.5195,853.5" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" />
+<polyline class="edge" data-from="sandbox_client" data-to="sandbox_worker" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="HTTP" points="298.08900000000006,161.8 298.089,328.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="sandbox_worker" data-to="clone" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.089,365 298.089,389 159.967,389 159.967,413" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="sandbox_worker" data-to="tool_ep" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.089,365 298.089,389 298.089,389 298.089,413" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="sandbox_worker" data-to="reset" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.089,365 298.089,389 435.47,389 435.47,413" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="tool_ep" data-to="bwrap" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.08900000000006,449.90000000000003 298.08900000000006,497.90000000000003" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="bwrap" data-to="seccomp" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.08900000000006,534.8000000000001 298.08900000000006,558.8000000000001 469.18550000000005,558.8000000000001 469.18550000000005,582.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="bwrap" data-to="ro" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.08900000000006,534.8000000000001 298.08900000000006,558.8000000000001 298.08900000000006,558.8000000000001 298.08900000000006,582.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="bwrap" data-to="pid" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="298.08900000000006,534.8000000000001 298.08900000000006,558.8000000000001 122.54650000000001,558.8000000000001 122.54650000000001,582.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="seccomp" data-to="rg" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="469.18550000000005,619.7 469.18550000000005,643.7 425.1855,643.7 425.1855,667.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="seccomp" data-to="fd" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="469.18550000000005,619.7 469.18550000000005,643.7 513.1855,643.7 513.1855,667.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="seccomp" data-to="read" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="469.18550000000005,619.7 469.18550000000005,643.7 606.2395,643.7 606.2395,667.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="seccomp" data-to="git" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="469.18550000000005,619.7 469.18550000000005,643.7 337.1855,643.7 337.1855,667.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="rg" data-to="repos" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="425.1855,704.6 425.1855,728.6 471.71250000000003,728.6 471.71250000000003,752.6" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="fd" data-to="repos" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="513.1855,704.6 513.1855,728.6 471.71250000000003,728.6 471.71250000000003,752.6" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="read" data-to="repos" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="606.2395,704.6 606.2395,728.6 471.71250000000003,728.6 471.71250000000003,752.6" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="git" data-to="repos" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="337.1855,704.6 337.1855,728.6 471.71250000000003,728.6 471.71250000000003,752.6" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<g class="edge-label" data-from="sandbox_client" data-to="sandbox_worker" data-label="HTTP">
+  <rect x="274.58900000000006" y="204.8" width="46.162" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="297.6700000000001" y="219.95000000000002" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">HTTP</text>
+</g>
+<g class="node" data-id="client" data-label="AskForgeClient" data-shape="rectangle">
+  <rect x="230.43100000000007" y="40" width="135.31599999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.08900000000006" y="58.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">AskForgeClient</text>
+</g>
+<g class="node" data-id="sandbox_client" data-label="SandboxClient" data-shape="rectangle">
+  <rect x="234.13600000000005" y="124.9" width="127.906" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.08900000000006" y="143.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">SandboxClient</text>
+</g>
+<g class="node" data-id="gvisor" data-label="gVisor · Kernel-level syscall sandboxing" data-shape="rectangle">
+  <rect x="250.132" y="853.5" width="282.775" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="391.5195" y="871.95" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">gVisor · Kernel-level syscall sandboxing</text>
+</g>
+<g class="node" data-id="sandbox_worker" data-label="sandbox_worker" data-shape="rectangle">
+  <rect x="225.985" y="328.1" width="144.208" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.089" y="346.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">sandbox_worker</text>
+</g>
+<g class="node" data-id="clone" data-label="POST /clone" data-shape="rectangle">
+  <rect x="101.94200000000001" y="413" width="116.05" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="159.967" y="431.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">POST /clone</text>
+</g>
+<g class="node" data-id="tool_ep" data-label="POST /tool" data-shape="rectangle">
+  <rect x="245.99200000000002" y="413" width="104.194" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.089" y="431.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">POST /tool</text>
+</g>
+<g class="node" data-id="reset" data-label="POST /reset" data-shape="rectangle">
+  <rect x="378.18600000000004" y="413" width="114.568" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="435.47" y="431.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">POST /reset</text>
+</g>
+<g class="node" data-id="bwrap" data-label="bubblewrap" data-shape="rectangle">
+  <rect x="242.28700000000003" y="497.90000000000003" width="111.604" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.08900000000006" y="516.35" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">bubblewrap</text>
+</g>
+<g class="node" data-id="seccomp" data-label="seccomp BPF" data-shape="rectangle">
+  <rect x="407.08500000000004" y="582.8000000000001" width="124.20099999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="469.18550000000005" y="601.2500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">seccomp BPF</text>
+</g>
+<g class="node" data-id="ro" data-label="Read-only filesystem" data-shape="rectangle">
+  <rect x="217.09300000000002" y="582.8000000000001" width="161.99200000000002" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="298.08900000000006" y="601.2500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Read-only filesystem</text>
+</g>
+<g class="node" data-id="pid" data-label="PID namespace" data-shape="rectangle">
+  <rect x="56" y="582.8000000000001" width="133.09300000000002" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="122.54650000000001" y="601.2500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">PID namespace</text>
+</g>
+<g class="node" data-id="rg" data-label="rg" data-shape="rectangle">
+  <rect x="395.1855" y="667.7" width="60" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="425.1855" y="686.1500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">rg</text>
+</g>
+<g class="node" data-id="fd" data-label="fd" data-shape="rectangle">
+  <rect x="483.1855" y="667.7" width="60" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="513.1855" y="686.1500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">fd</text>
+</g>
+<g class="node" data-id="read" data-label="read" data-shape="rectangle">
+  <rect x="571.1855" y="667.7" width="70.108" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="606.2395" y="686.1500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">read</text>
+</g>
+<g class="node" data-id="git" data-label="git" data-shape="rectangle">
+  <rect x="307.1855" y="667.7" width="60" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="337.1855" y="686.1500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">git</text>
+</g>
+<g class="node" data-id="repos" data-label="Cloned Repos" data-shape="rectangle">
+  <rect x="409.612" y="752.6" width="124.20099999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="471.71250000000003" y="771.0500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Cloned Repos</text>
+</g>
+</svg>

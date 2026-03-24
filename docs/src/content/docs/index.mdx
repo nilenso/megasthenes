@@ -1,0 +1,43 @@
+---
+title: ask-forge
+description: Ask questions to any GitHub repository with a sandboxed AI harness.
+template: splash
+hero:
+  tagline: Ask questions to any GitHub repository using an AI-powered, sandboxed harness with full code exploration tools.
+  actions:
+    - text: Get Started
+      link: /ask-forge/start-here/getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/nilenso/ask-forge
+      variant: minimal
+      icon: external
+      attrs:
+        target: _blank
+        rel: noreferrer
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="home-card-grid">
+  <CardGrid>
+    <Card title="Any Repo" icon="external">
+      Ask questions about GitHub or GitLab repositories.
+    </Card>
+    <Card title="Local Clones, Any Revision" icon="cloud-download">
+      Work against a real local clone and inspect any branch, tag, or commit.
+    </Card>
+    <Card title="Read-Only Code Tools" icon="open-book">
+      Explore with ripgrep, file reads, directory listings, and git commands.
+    </Card>
+    <Card title="Sandboxed Execution" icon="laptop">
+      Run exploration in an isolated container for untrusted repos.
+    </Card>
+    <Card title="Observability" icon="bars">
+      Trace LLM calls, tool usage, latency, and tokens with OpenTelemetry.
+    </Card>
+    <Card title="Highly Configurable" icon="setting">
+      Choose provider and model, tune prompts and iteration limits, and control compaction.
+    </Card>
+  </CardGrid>
+</div>

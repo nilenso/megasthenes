@@ -1,0 +1,136 @@
+id,repository,commit_id,question,is_answer_relevant,is_evidence_supported,is_clear_and_readable,misc_feedback
+1,https://github.com/GNOME/gnumeric.git,e55637660d858ffc2b49f2c1d0be40dfeb9f8f4e,What interesting data structures are in this?,1,1,1,
+2,https://github.com/anthropics/skills.git,1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563,Does firefox support webrtc?,,,,
+3,https://github.com/anthropics/skills.git,1ed29a03dc852d30fa6ef2ca53a67dc2c2c2c563,What is RAG,,,,
+4,https://github.com/badlogic/pi-mono.git,0091857f8b2e908bd6e269b1fbd4ce2e93a2f794,How is it doing I/O,,,,
+5,https://github.com/badlogic/pi-mono.git,0091857f8b2e908bd6e269b1fbd4ce2e93a2f794,explain arch,1,0,1,
+6,https://github.com/badlogic/pi-mono.git,0091857f8b2e908bd6e269b1fbd4ce2e93a2f794,what do you think of pi-mono?,1,1,1,
+7,https://github.com/badlogic/pi-mono.git,b170341b14efa46b5a7164ca6c5aab3028bade32,How does one refresh the list of models shown by pi coding agent cli,1,1,1,"- ""Changelog (line 1402)"" is better replaced by a file path link"
+8,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,What is this repo about?,1,0,1,- lot more links would've been useful
+9,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,Explain the architecture,1,1,1,- it'd be good to have links as references for the key features
+10,https://github.com/berezhinskiy/ecoflow_exporter.git,b0fdd89a5cf6a03c415fb8269995db8640527f65,hi,,,,- asked a question not relevant to the codebase
+11,https://github.com/charmbracelet/crush.git,3bda767c6700db1ead64af01471b3e7b868a569f,how does this work?,1,1,1,
+12,https://github.com/charmbracelet/glow.git,752de97c5a331af0eed0c7b417462621bffa533e,can I use this tool to render any markdown output from the pi coding agent?,0,0,,"- it said yes without understanding how pi coding agent works
+- it made up pi-coding-agent and how it works (pi-coding-agent | glow)
+- file path isn't present, only the file name with the line number"
+13,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,Are git submodules implemented in bash or C?,,,,
+14,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,Why is the bash interface needed?,,,,
+15,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,How do submodules mesh with worktrees?,,,,
+16,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,What's the difference between `read_cache()` and `read_cache_preload()`? When to use one over the other?,,,,
+17,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,What's the difference between loading the index and stat-ing the files? Also how can we know in advance how many files are there to check? What heuristic does the codebase use there?,,,,
+18,https://github.com/git/git.git,3e0db84c88c57e70ac8be8c196dfa92c5d656fbc,What is `the_repository`?,,,,
+19,https://github.com/kanflo/opendps.git,c52ebac30b4f04a34b9fd6393789e5cefa0167e7,What's' this project even about?,,,,
+20,https://github.com/neenaoffline/litem8.git,bc2ffafe5b0a5a02287b81009bdeb586020a5ec6,What is this repo even about?,1,1,1,"- 001_create_users.sql, 002_add_posts.sql were linked incorrectly"
+21,https://github.com/nicobailon/pi-subagents.git,4fc6162c8fb3d696c879b8a318f8ab099e20e4fb,I have installed this tool. How do I use this?,1,0,1,- no links provided as evidence to the claims made
+22,https://github.com/nicobailon/pi-subagents.git,4fc6162c8fb3d696c879b8a318f8ab099e20e4fb,how do I trigger the subagent from pi,1,,1,
+23,https://github.com/nilenso/ask-forge.git,da4991248245786679d58c6d7d3aa3f455318ee5,Give me a glossary of project specific terms,1,1,1,- Would be better if functions/classes were linked to their location in the codebase
+24,https://github.com/nilenso/bean.git,93b9c29f51364b2b8f94f92126ba2da73cbd28d4,I believe there are some hacks in the frame spillage error calculation. Can you remind me what it is,,,,"- Instead of ""The hack is located in src/bean/functions.cljs in the bean-get* function (lines 187-191)."" , it could say src/bean/functions.cljs:L187-L191, which could then be clickable. This happens twice in this conversation."
+25,https://github.com/nilenso/context-viewer.git,3e14474fe8022db45923b71184231d8b969928bc,what is the input data format required for parsing? Specifically for a jsonl file,1,1,1,
+26,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,How can I quickly setup goose and get it up and running locally,1,,1,
+27,https://github.com/nilenso/goose.git,1a88d683fe428b8019c63c0e07af45c691a68d5b,What are the trade-offs with choosing either Redis or RabbitMQ as the broker?,1,,1,
+28,https://github.com/nilenso/leavebot.git,d49e35cb42320119ee0f97274843163332117185,does this work with discord?,1,1,1,"- Because the filenames are mentioned without project relative paths, it couldn't be linked"
+29,https://github.com/nilenso/raj-onboarding.git,c2f24fa95e1a296686f3131c80b5d592b4374b98,"Analyse the clojure code in pnil, is it idiomatic?",1,1,1,- Links are broken. Actual link contains `src`
+30,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,"Can this be run on a laptop, what kind of sensor data does it fetch? What actions can I perform on the device",1,0,1,
+31,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,Does M1 air have BLE capabilities,1,,1,- we should not strictly expect evidence if question is not about the repo
+32,https://github.com/npike/ha-ecoflow-ble.git,0726ed4b20abfdb1b5da38df06f79fe66d6dbfe3,can you give me python code which replicates this,1,,1,- question not about the repo itself
+33,https://github.com/openai/codex.git,7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad,"Does the harness have special prompting for its ""pragmatic"" and ""friendly"" personalities?",1,1,1,-  the personality content is not strictly relevant for answering the question
+34,https://github.com/openai/codex.git,7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad,What is standard and max variants?,1,0,1,- should have links to support variant claim
+35,https://github.com/rabits/ha-ef-ble.git,1f50e8fee93803ef187aa651aee680cd51111b63,"Give me python code to print all data it receives, using M1 air. I have installed bleak",,,,
+36,https://github.com/rabits/ha-ef-ble.git,1f50e8fee93803ef187aa651aee680cd51111b63,"➜  ecoflow python3 improved_ble.py
+Traceback (most recent call last):
+  File ""/Users/yogiraj/ecoflow/improved_ble.py"", line 8, in <module>
+    from eflib import NewDevice
+ModuleNotFoundError: No module named 'eflib'
+➜  ecoflow pip3 install eflib
+ERROR: Could not find a version that satisfies the requirement eflib (from versions: none)
+ERROR: No matching distribution found for eflib
+
+[notice] A new release of pip is available: 23.2.1 -> 26.0
+[notice] To update, run: python3.11 -m pip install --upgrade pip",,,,
+37,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,what is used for rendering markdown in user chat,,,,
+38,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,Is there a branch summary feature for the session tree?,1,1,1,- Code snippet should be accompanied by file location with line number
+39,https://github.com/tfidfwastaken/pi-web.git,bbc739b6e7524b1394ddfa2899f98c747909ba89,What would be needed to show the message preview on the session tree?,1,1,1,- SessionTreeDialog.tsx was mentioned as-is in one section where it was incorrectly linked and with the project path in another where it was correctly linked. File names in response should be consistent.
+40,https://github.com/thedotmack/claude-mem.git,1341e93fcab15b9caf48bc947d8521b4a97515d8,How does this work?,1,0,1,"- no file links
+- table rendering is broken"
+41,https://github.com/thedotmack/claude-mem.git,b2ddf59db46cf380964379e9ba2d7279c67fc12b,who are the top 5 contributors to this repository in terms of commits,,,,
+42,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the default LoRA rank and how do I change it?,,,,
+43,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how does the reward scoring break down across stages?,,,,
+44,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,What happens when a completion has zero non-empty code lines?,,,,
+45,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the timeout for type checking?,,,,
+46,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how does degenerate output detection work?,,,,
+47,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what penalty does a degenerate output get?,,,,
+48,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"What optimizer is used on macOS vs Linux for GRPO training, and where is this decision made?",,,,
+49,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what are the default learning rates for GRPO vs SFT?,,,,
+50,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how are syntax errors detected in the compiler output?,,,,
+51,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,How does the graduated type error scoring work? What score does a completion get if it has exactly 3 type errors?,,,,
+52,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what score does a solution need to be considered passing in eval?,,,,
+53,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what happens to the reward if type checking times out?,,,,
+54,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,when does the system prepend the function signature to a completion?,,,,
+55,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what do I need to set before I can start training?,,,,
+56,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what does top_entropy_quantile do and where does the idea come from?,,,,
+57,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,What is the default temperature for GRPO sampling and what are the different ways in which it can be overridden?,,,,
+58,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what reward score do you get if type checking passes but compilation fails?,,,,
+59,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what is the full lifecycle of a single training step from prompt to reward computation.,,,,
+60,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what log files does GRPO training produce?,,,,
+61,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how do SFT and RLVR differ in how they handle the chat template?,,,,
+62,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the default GPU memory utilization for the vLLM server?,,,,
+63,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what columns does the dataset need for RLVR vs SFT?,,,,
+64,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,How does the system handle checkpoint resumption during GRPO training? What happens to the LoRA config?,,,,
+65,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what API endpoints does the dashboard expose?,,,,
+66,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how is the SFT dataset split into train and eval?,,,,
+67,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,Trace what happens when you run 'make rlvr-train'. What scripts and processes are started?,,,,
+68,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what GPU does the nix flake target?,,,,
+69,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what does _ensure_cuda_driver do?,,,,
+70,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,What happens when the tests_reward function cannot find the GRPO_TEST_RESULT pattern in stdout but the process exits with code 0?,,,,
+71,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the default beta value and why is it set to 0?,,,,
+72,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the difference between pass@1 and pass@All?,,,,
+73,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how does SFT training avoid catastrophic forgetting?,,,,
+74,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what does the nix dev shell include?,,,,
+75,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,how does the dashboard compute error rate trends?,,,,
+76,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what training parameters should I tweak if I have a GPU with 100GB VRAM?,,,,
+77,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"if a model generates a perfect OCaml solution but wraps it in 6 code blocks with a paragraph of explanation after, what's the final reward?",,,,
+78,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,can a completion ever get a non-zero compile score but a zero type check score?,,,,
+79,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what's the lowest possible non-zero reward a completion can get?,,,,
+80,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,why does the reward system use ProcessPoolExecutor instead of threads for parallel scoring?,,,,
+81,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"if a test file has no assert statements at all, how does the partial credit system handle it?",,,,
+82,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,can a solution receive both a style penalty and a degenerate penalty?,,,,
+83,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,"a model outputs just `failwith ""not implemented""` — walk me through the exact reward it gets",,,,
+84,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,what would happen if someone sets GRPO_NUM_GENERATIONS higher than GRPO_BATCH_SIZE?,,,,
+85,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,the eval system and the RLVR training system both score completions — do they use the same reward logic or different implementations?,,,,
+86,https://github.com/nilenso/grpo-trainer,5804a9a3ff2dc1bd727fb4399d07ecd490ef2ceb,why does the SFT system prompt say 'Respond only with runnable OCaml code' but the RLVR prompt template has detailed few-shot examples?,,,,
+87,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,explain all things I need to know as a user of this library and nothing else.,,,,
+88,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What’s the default worker thread count, and where does Goose actually use it when building worker opts?",,,,
+89,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What’s the default graceful shutdown time, and how does Redis shutdown differ from RabbitMQ shutdown?",,,,
+90,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What’s the max RMQ delay Goose allows, and what error do I get if I go past it?",,,,
+91,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"Which queue names are protected, and how does spec validation stop me from using them directly?",,,,
+92,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What Redis key prefixes does Goose use (queue, in-progress, process, heartbeat, batch), and who uses which?",,,,
+93,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Why does Goose make me inject broker state instead of deriving it from config each call?,,,,
+94,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"Why doesn’t Goose run a separate console server, and what function should my app mount instead?",,,,
+95,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"In RMQ mode, which Broker protocol methods are implemented, and which ones aren't?",,,,
+96,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Can you walk me through `perform-async` from API call to actually applying the target function?,,,,
+97,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"If a job is scheduled in the past, what does Redis do vs RabbitMQ, and which side of the queue gets used?",,,,
+98,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What’s the exact RMQ wrapper order, and when does ACK happen relative to retry/dead handling?",,,,
+99,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,How does Goose decide whether to record execution vs scheduled vs cron vs retry latency?,,,,
+100,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"When a Redis job fails, how is `:state` updated before Goose decides retry vs dead?",,,,
+101,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"In Goose, what does `retry-count` really mean, and how many total executions happen for `max-retries` 0 vs 5?",,,,
+102,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"Do Redis and RMQ retry boundary checks behave the same, or is there an edge-case mismatch?",,,,
+103,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"How does `retry-queue` turn into `ready-retry-queue`, and when does Goose route to it?",,,,
+104,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What are the batch states, and exactly how are they computed from job counts?",,,,
+105,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,How does Redis batch handling avoid enqueueing the callback more than once under concurrency?,,,,
+106,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What keys does Redis create for a batch, and what does each one hold?",,,,
+107,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"At batch completion, which keys get `EXPIRE NX` and why those specific ones?",,,,
+108,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What fields are stored in a cron entry, and what timezone is used if I don’t pass one?",,,,
+109,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"How are due cron entries fetched per tick, and which default limits that batch size?",,,,
+110,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"When cron entries are enqueued, how is `cron-run-at` computed and where is cron parsing done?",,,,
+111,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Are any cron limitations called out in the repo?,,,,
+112,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Why does Goose store both `queue` and `ready-queue` in the job payload?,,,,
+113,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"How does console param validation deal with bad UUIDs, bad filter types, and invalid page/limit numbers?",,,,
+114,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Why does Redis `prioritise-execution` return that nested transaction-like shape instead of just true/false?,,,,
+115,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,How does orphan recovery in Redis decide a worker is dead and replay its preserved jobs?,,,,
+116,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"What exact scenario throws `MAX_DELAY limit breached`, and through which public API do I hit it?",,,,
+117,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"When does `random-element` throw `List is empty`, and which RMQ paths depend on it?",,,,
+118,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,What input/state leads to `CHANNEL_MAX limit reached` in `rmq.channel/open`?,,,,
+119,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"In `scheduled-jobs/prioritises-execution`, is there a bug where original jobs are passed instead of only validated ones?",,,,
+120,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"Can you trace `perform-in-sec` on Redis end-to-end, including final queue placement via `ready-or-retry-queue`?",,,,
+121,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,Are Redis and RMQ retry terminal conditions equivalent for edge values?,,,,
+122,https://github.com/nilenso/goose,1a88d683fe428b8019c63c0e07af45c691a68d5b,"How do cron register/due-fetch/enqueue-reschedule steps work together in Redis, and why is `ensure-sequential` needed?",,,,

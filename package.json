@@ -18,7 +18,7 @@
 		"typescript": "^5"
 	},
 	"dependencies": {
-		"@mariozechner/pi-ai": "^0.53.1",
+		"@mariozechner/pi-ai": "^0.62.0",
 		"@opentelemetry/api": "^1.9.0",
 		"@sinclair/typebox": "^0.34.48",
 		"dotenv": "^17.3.1"
