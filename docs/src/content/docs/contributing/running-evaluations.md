@@ -18,6 +18,15 @@ huggingface-cli download nilenso/ask-forge-eval-dataset --repo-type dataset --lo
 
 ```bash
 bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv
+
+# With effort-based thinking (any provider)
+bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --effort high
+
+# With adaptive thinking (Anthropic 4.6 only)
+bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --thinking adaptive
+
+# Adaptive with explicit effort guidance
+bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --thinking adaptive --effort medium
 ```
 
 Results are written to `scripts/eval/reports/`.
