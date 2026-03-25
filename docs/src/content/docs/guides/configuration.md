@@ -120,6 +120,52 @@ When enabled, repository cloning and all tool execution (file reads, searches, g
 
 See the [Sandboxed Execution guide](/ask-forge/guides/sandbox/) for security layers, architecture, and how to run the sandbox server.
 
+### Thinking
+
+Control the model's reasoning/thinking behavior via the `thinking` field. Ask Forge supports two modes:
+
+- **Effort-based** (cross-provider): Set an effort level that pi-ai maps to each provider's native format (`reasoning.effort` for OpenAI, `thinking` for Anthropic, etc.)
+- **Adaptive** (Anthropic 4.6 only): The model decides when and how much to think per request
+
+```ts
+// OpenAI — effort-based reasoning
+const client = new AskForgeClient({
+  provider: "openai",
+  model: "o3",
+  thinking: { effort: "low" },
+});
+
+// Anthropic 4.5 — effort-based (older model, no adaptive support)
+const client = new AskForgeClient({
+  provider: "anthropic",
+  model: "claude-sonnet-4-5-20251022",
+  thinking: { effort: "high", budgetOverrides: { high: 10000 } },
+});
+
+// Anthropic 4.6 — adaptive (model decides when/how much to think)
+const client = new AskForgeClient({
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  thinking: { type: "adaptive" },
+});
+
+// Anthropic 4.6 — adaptive with explicit effort guidance
+const client = new AskForgeClient({
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  thinking: { type: "adaptive", effort: "medium" },
+});
+
+// No thinking (default)
+const client = new AskForgeClient();
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `"adaptive"` | Anthropic 4.6 only. Omit for effort-based mode. |
+| `effort` | `"minimal" \| "low" \| "medium" \| "high" \| "xhigh"` | Required for effort-based, optional for adaptive. |
+| `budgetOverrides` | `ThinkingBudgets` | Custom token budgets per level (effort-based only). |
+
 ### Context Compaction
 
 When conversations grow long, ask-forge can automatically summarize older messages to stay within the model's context window. This is enabled by default.
