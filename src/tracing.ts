@@ -56,6 +56,8 @@ const ATTR = {
 	RESPONSE_TOTAL_LINKS: "ask_forge.response.total_links",
 	RESPONSE_INVALID_LINKS: "ask_forge.response.invalid_links",
 	ERROR_TYPE: "error.type",
+	ERROR_NAME: "ask_forge.error.name",
+	ERROR_MESSAGE: "ask_forge.error.message",
 } as const;
 
 // OTel event names (GenAI semantic conventions)
@@ -256,10 +258,17 @@ export function endToolSpan(span: Span, result: string): void {
 }
 
 /** End a tool span with an error. */
-export function endToolSpanWithError(span: Span, error: unknown): void {
-	span.setStatus({ code: SpanStatusCode.ERROR, message: "tool execution failed" });
-	if (error instanceof Error) {
-		span.recordException(error);
-	}
+export function endToolSpanWithError(span: Span, error: unknown, result?: string): void {
+	const exception =
+		error instanceof Error ? error : new Error(typeof error === "string" ? error : JSON.stringify(error));
+	span.addEvent(EVENT.TOOL_CALL_RESULT, {
+		content: result ?? exception.message,
+	});
+	span.setAttributes({
+		[ATTR.ERROR_NAME]: exception.name,
+		[ATTR.ERROR_MESSAGE]: exception.message,
+	});
+	span.setStatus({ code: SpanStatusCode.ERROR, message: exception.message });
+	span.recordException(exception);
 	span.end();
 }

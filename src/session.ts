@@ -586,7 +586,7 @@ export class Session {
 					return { text: result, isError: false };
 				} catch (error) {
 					const errorText = formatToolExecutionError(call.name, error);
-					endToolSpanWithError(toolSpan, error);
+					endToolSpanWithError(toolSpan, error, errorText);
 					this.#logger.warn(`TOOL_ERROR: ${call.name}`, `${Date.now() - t0}ms ${errorText}`);
 					return { text: errorText, isError: true };
 				}

@@ -578,9 +578,14 @@ describe("OTel tracing", () => {
 			// Tool span ended with error
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
 			expect(toolSpan?.status.code).toBe(SpanStatusCode.ERROR);
+			expect(toolSpan?.status.message).toBe("tool crashed");
 			expect(toolSpan?.ended).toBe(true);
+			expect(toolSpan?.attributes["ask_forge.error.name"]).toBe("Error");
+			expect(toolSpan?.attributes["ask_forge.error.message"]).toBe("tool crashed");
 			expect(toolSpan?.exceptions.length).toBe(1);
 			expect(toolSpan?.exceptions[0]?.message).toBe("tool crashed");
+			expect(toolSpan?.events.at(-1)?.name).toBe("gen_ai.tool.call.result");
+			expect(toolSpan?.events.at(-1)?.attributes?.content).toBe("[ERROR] Tool execution failed for rg: tool crashed");
 
 			// Ask span still ends successfully after the model gets the tool error as context
 			const askSpan = recorder.getSpan("ask");
