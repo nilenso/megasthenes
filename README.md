@@ -293,16 +293,34 @@ src/sandbox/
 
 ### Running the Sandbox
 
-**Prerequisite:** [Install gVisor](https://gvisor.dev/docs/user_guide/install/) and register it with Docker/Podman.
+**Prerequisites:**
+
+1. [Install gVisor](https://gvisor.dev/docs/user_guide/install/) and register the `runsc` runtime with your container engine.
+
+2. **Podman** requires two extra configuration steps for gVisor:
+
+   - Register `runsc` as a runtime in `/etc/containers/containers.conf`:
+     ```ini
+     [engine.runtimes]
+     runsc = ["/usr/local/bin/runsc"]
+     ```
+     If running rootful (recommended for gVisor), do **not** include `--rootless=true`.
+
+   - Use `--in-pod=false` — podman-compose creates a pod by default whose infra container uses the default runtime (`crun`), which conflicts with gVisor. The justfile already handles this.
+
+   **Docker** works out of the box with `runtime: runsc` — no extra configuration needed.
 
 ```bash
-# Using just (recommended)
-just sandbox-up        # Start container
-just sandbox-down      # Stop container
-just sandbox-logs      # View logs
+# Using just (recommended) — requires sudo for gVisor
+sudo just sandbox-up        # Build & start container
+sudo just sandbox-down      # Stop container
+sudo just sandbox-logs      # View logs
 
-# Or with docker-compose
-docker-compose up -d
+# Or manually with podman (rootful)
+sudo podman-compose --in-pod=false up -d
+
+# Or with docker compose
+docker compose up -d
 ```
 
 ### HTTP API
