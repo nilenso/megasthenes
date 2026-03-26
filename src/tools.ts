@@ -124,11 +124,11 @@ function validateProjectPath(repoPath: string, userPath: string): string | null 
 	const fullPath = resolve(repoRoot, userPath);
 	const relPath = relative(repoRoot, fullPath);
 
-	if (relPath === "" || (!relPath.startsWith("..") && !isAbsolute(relPath))) {
-		return fullPath;
+	if (relPath.startsWith("..") || isAbsolute(relPath)) {
+		return null;
 	}
 
-	return null;
+	return fullPath;
 }
 
 async function executeRg(args: Record<string, unknown>, repoPath: string): Promise<string> {

@@ -146,11 +146,11 @@ function validatePath(worktree: string, userPath: string): string | null {
 	const fullPath = resolve(worktreeRoot, userPath);
 	const relPath = relative(worktreeRoot, fullPath);
 
-	if (relPath === "" || (!relPath.startsWith("..") && !isAbsolute(relPath))) {
-		return fullPath;
+	if (relPath.startsWith("..") || isAbsolute(relPath)) {
+		return null;
 	}
 
-	return null;
+	return fullPath;
 }
 
 /** Run a git command with filesystem + PID isolation. */
