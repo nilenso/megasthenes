@@ -56,6 +56,8 @@ const ATTR = {
 	RESPONSE_TOTAL_LINKS: "ask_forge.response.total_links",
 	RESPONSE_INVALID_LINKS: "ask_forge.response.invalid_links",
 	ERROR_TYPE: "error.type",
+	ERROR_NAME: "ask_forge.error.name",
+	ERROR_MESSAGE: "ask_forge.error.message",
 } as const;
 
 // OTel event names (GenAI semantic conventions)
@@ -66,6 +68,85 @@ const EVENT = {
 	TOOL_CALL_ARGUMENTS: "gen_ai.tool.call.arguments",
 	TOOL_CALL_RESULT: "gen_ai.tool.call.result",
 } as const;
+
+function stringifyUnknownError(error: unknown): string {
+	if (error === undefined) return "";
+	if (error === null) return "null";
+	if (
+		typeof error === "string" ||
+		typeof error === "number" ||
+		typeof error === "boolean" ||
+		typeof error === "bigint" ||
+		typeof error === "symbol"
+	) {
+		return String(error);
+	}
+
+	try {
+		const json = JSON.stringify(error);
+		if (json && json !== "{}") {
+			return json;
+		}
+	} catch {
+		// Fall back to String(error) below when serialization fails.
+	}
+
+	return String(error);
+}
+
+function normalizeErrorDetails(
+	error: unknown,
+	fallbackMessage: string,
+): { name: string; message: string; exception?: Error } {
+	let rawName: string | undefined;
+	let rawMessage: string | undefined;
+	let exception: Error | undefined;
+
+	if (error instanceof Error) {
+		rawName = error.name;
+		rawMessage = error.message;
+		exception = error;
+	} else if (error && typeof error === "object") {
+		const errorLike = error as { name?: unknown; message?: unknown; errorMessage?: unknown };
+		rawName = typeof errorLike.name === "string" ? errorLike.name : undefined;
+		rawMessage =
+			typeof errorLike.message === "string"
+				? errorLike.message
+				: typeof errorLike.errorMessage === "string"
+					? errorLike.errorMessage
+					: undefined;
+	} else if (typeof error === "string") {
+		rawMessage = error;
+	}
+
+	if (!rawMessage) {
+		rawMessage = stringifyUnknownError(error);
+	}
+
+	const message = rawMessage.trim() || fallbackMessage;
+	const name = rawName?.trim() || "Error";
+
+	if (!exception && error !== undefined) {
+		exception = new Error(message);
+		exception.name = name;
+	}
+
+	return { name, message, exception };
+}
+
+function annotateErrorSpan(span: Span, error: unknown, fallbackMessage: string, errorType?: string) {
+	const details = normalizeErrorDetails(error, fallbackMessage);
+	span.setAttributes({
+		...(errorType ? { [ATTR.ERROR_TYPE]: errorType } : {}),
+		[ATTR.ERROR_NAME]: details.name,
+		[ATTR.ERROR_MESSAGE]: details.message,
+	});
+	span.setStatus({ code: SpanStatusCode.ERROR, message: details.message });
+	if (details.exception) {
+		span.recordException(details.exception);
+	}
+	return details;
+}
 
 // =============================================================================
 // Span helpers — thin wrappers that return OTel Span objects
@@ -124,12 +205,8 @@ export function endAskSpan(
 }
 
 /** End the root ask span with an error. */
-export function endAskSpanWithError(span: Span, errorType: string, error?: Error): void {
-	span.setAttributes({ [ATTR.ERROR_TYPE]: errorType });
-	span.setStatus({ code: SpanStatusCode.ERROR, message: errorType });
-	if (error) {
-		span.recordException(error);
-	}
+export function endAskSpanWithError(span: Span, errorType: string, error?: unknown): void {
+	annotateErrorSpan(span, error, errorType, errorType);
 	span.end();
 }
 
@@ -155,10 +232,7 @@ export function endCompactionSpan(
 
 /** End the compaction span with an error. */
 export function endCompactionSpanWithError(span: Span, error: unknown): void {
-	span.setStatus({ code: SpanStatusCode.ERROR, message: "compaction failed" });
-	if (error instanceof Error) {
-		span.recordException(error);
-	}
+	annotateErrorSpan(span, error, "compaction failed", "compaction_failed");
 	span.end();
 }
 
@@ -214,12 +288,7 @@ export function endGenerationSpan(
 
 /** End a generation span with an error. */
 export function endGenerationSpanWithError(span: Span, error: unknown): void {
-	span.setStatus({ code: SpanStatusCode.ERROR, message: "generation failed" });
-	if (error instanceof Error) {
-		span.recordException(error);
-	} else if (typeof error === "string") {
-		span.recordException(new Error(error));
-	}
+	annotateErrorSpan(span, error, "generation failed", "generation_failed");
 	span.end();
 }
 
@@ -256,10 +325,10 @@ export function endToolSpan(span: Span, result: string): void {
 }
 
 /** End a tool span with an error. */
-export function endToolSpanWithError(span: Span, error: unknown): void {
-	span.setStatus({ code: SpanStatusCode.ERROR, message: "tool execution failed" });
-	if (error instanceof Error) {
-		span.recordException(error);
-	}
+export function endToolSpanWithError(span: Span, error: unknown, result?: string): void {
+	const details = annotateErrorSpan(span, error, "tool execution failed", "tool_execution_failed");
+	span.addEvent(EVENT.TOOL_CALL_RESULT, {
+		content: result ?? details.message,
+	});
 	span.end();
 }

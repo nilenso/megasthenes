@@ -443,7 +443,7 @@ export class Session {
 			endAskSpanWithError(askSpan, "max_iterations_reached");
 			return result;
 		} catch (error) {
-			endAskSpanWithError(askSpan, "unexpected_error", error instanceof Error ? error : undefined);
+			endAskSpanWithError(askSpan, "unexpected_error", error);
 			throw error;
 		}
 	}
@@ -466,7 +466,7 @@ export class Session {
 		const outcome = await processStream(streamFn, this.#config.model, this.#context, onProgress, streamOptions);
 
 		if (!outcome.ok) {
-			endGenerationSpanWithError(genSpan, outcome.error);
+			endGenerationSpanWithError(genSpan, outcome.errorDetails ?? outcome.error);
 			this.#logger.error(`API call failed (iteration ${iteration + 1})`, {
 				...(typeof outcome.errorDetails === "object" ? outcome.errorDetails : { error: outcome.errorDetails }),
 				iteration: iteration + 1,
@@ -508,14 +508,20 @@ export class Session {
 		// Check if we have a final text response (no tool calls)
 		const responseToolCalls = response.content.filter((b) => b.type === "toolCall");
 		if (responseToolCalls.length === 0) {
-			endGenerationSpan(genSpan, {
-				output: response.content,
-				inputTokens: response.usage?.input ?? 0,
-				outputTokens: response.usage?.output ?? 0,
-				cacheReadTokens: response.usage?.cacheRead ?? 0,
-				cacheCreationTokens: response.usage?.cacheWrite ?? 0,
-				stopReason: (response as unknown as { stopReason?: string }).stopReason,
-			});
+			const textBlocks = response.content.filter((b) => b.type === "text");
+			const responseText = textBlocks.map((b) => (b as { type: "text"; text: string }).text).join("\n");
+			if (!responseText.trim()) {
+				endGenerationSpanWithError(genSpan, "Empty response from API");
+			} else {
+				endGenerationSpan(genSpan, {
+					output: response.content,
+					inputTokens: response.usage?.input ?? 0,
+					outputTokens: response.usage?.output ?? 0,
+					cacheReadTokens: response.usage?.cacheRead ?? 0,
+					cacheCreationTokens: response.usage?.cacheWrite ?? 0,
+					stopReason: (response as unknown as { stopReason?: string }).stopReason,
+				});
+			}
 			return {
 				done: true,
 				result: this.#buildTextResponse(ctx, response, onProgress),
@@ -586,7 +592,7 @@ export class Session {
 					return { text: result, isError: false };
 				} catch (error) {
 					const errorText = formatToolExecutionError(call.name, error);
-					endToolSpanWithError(toolSpan, error);
+					endToolSpanWithError(toolSpan, error, errorText);
 					this.#logger.warn(`TOOL_ERROR: ${call.name}`, `${Date.now() - t0}ms ${errorText}`);
 					return { text: errorText, isError: true };
 				}

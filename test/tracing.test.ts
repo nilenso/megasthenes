@@ -275,6 +275,33 @@ function createMockConfig(overrides?: Partial<SessionConfig>): SessionConfig {
 	};
 }
 
+function expectSpanErrorDetails(
+	span: RecordedSpan | undefined,
+	{
+		errorType,
+		message,
+		name = "Error",
+		exceptionMessage = message,
+		exceptionCount = 1,
+	}: {
+		errorType: string;
+		message: string;
+		name?: string;
+		exceptionMessage?: string;
+		exceptionCount?: number;
+	},
+) {
+	expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+	expect(span?.status.message).toBe(message);
+	expect(span?.attributes["error.type"]).toBe(errorType);
+	expect(span?.attributes["ask_forge.error.name"]).toBe(name);
+	expect(span?.attributes["ask_forge.error.message"]).toBe(message);
+	expect(span?.exceptions.length).toBe(exceptionCount);
+	if (exceptionCount > 0) {
+		expect(span?.exceptions[0]?.message).toBe(exceptionMessage);
+	}
+}
+
 // =============================================================================
 // Test suite
 // =============================================================================
@@ -439,8 +466,10 @@ describe("OTel tracing", () => {
 			await session.ask("Will fail");
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
-			expect(genSpan?.status.code).toBe(SpanStatusCode.ERROR);
-			expect(genSpan?.exceptions.length).toBeGreaterThan(0);
+			expectSpanErrorDetails(genSpan, {
+				errorType: "generation_failed",
+				message: "Rate limit exceeded",
+			});
 		});
 	});
 
@@ -536,8 +565,11 @@ describe("OTel tracing", () => {
 			await session.ask("Loop");
 
 			const askSpan = recorder.getSpan("ask");
-			expect(askSpan?.status.code).toBe(SpanStatusCode.ERROR);
-			expect(askSpan?.attributes["error.type"]).toBe("max_iterations_reached");
+			expectSpanErrorDetails(askSpan, {
+				errorType: "max_iterations_reached",
+				message: "max_iterations_reached",
+				exceptionCount: 0,
+			});
 		});
 
 		test("API error ends both generation and ask spans properly", async () => {
@@ -551,6 +583,8 @@ describe("OTel tracing", () => {
 
 			// Generation ended with error
 			expect(genSpan?.status.code).toBe(SpanStatusCode.ERROR);
+			expect(genSpan?.attributes["error.type"]).toBe("generation_failed");
+			expect(genSpan?.attributes["ask_forge.error.message"]).toBe("Rate limit exceeded");
 			expect(genSpan?.ended).toBe(true);
 
 			// Ask span still ended (no orphan)
@@ -577,10 +611,13 @@ describe("OTel tracing", () => {
 
 			// Tool span ended with error
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
-			expect(toolSpan?.status.code).toBe(SpanStatusCode.ERROR);
+			expectSpanErrorDetails(toolSpan, {
+				errorType: "tool_execution_failed",
+				message: "tool crashed",
+			});
 			expect(toolSpan?.ended).toBe(true);
-			expect(toolSpan?.exceptions.length).toBe(1);
-			expect(toolSpan?.exceptions[0]?.message).toBe("tool crashed");
+			expect(toolSpan?.events.at(-1)?.name).toBe("gen_ai.tool.call.result");
+			expect(toolSpan?.events.at(-1)?.attributes?.content).toBe("[ERROR] Tool execution failed for rg: tool crashed");
 
 			// Ask span still ends successfully after the model gets the tool error as context
 			const askSpan = recorder.getSpan("ask");
@@ -610,41 +647,88 @@ describe("OTel tracing", () => {
 			await session.ask("Fail with API error");
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
-			expect(genSpan?.status.code).toBe(SpanStatusCode.ERROR);
+			expectSpanErrorDetails(genSpan, {
+				errorType: "generation_failed",
+				message: "Rate limit exceeded",
+			});
 			expect(genSpan?.ended).toBe(true);
-			expect(genSpan?.exceptions.length).toBe(1);
-			expect(genSpan?.exceptions[0]?.message).toBe("Rate limit exceeded");
 		});
 
-		test("compaction error records exception on compaction span", async () => {
-			// We need to trigger a compaction error. The simplest way is to fill the context
-			// with enough messages to trigger compaction, then have the model call fail during compaction.
-			// Instead, we'll test at the span level by creating a session with a stream that works
-			// but making maybeCompact throw by providing an invalid model config.
+		test("empty final responses record structured details on the generation span", async () => {
+			const streamFn = (() => ({
+				[Symbol.asyncIterator]: async function* () {
+					yield { type: "text_delta", delta: "" };
+				},
+				result: async () => ({
+					role: "assistant" as const,
+					content: [{ type: "text" as const, text: "" }],
+					usage: { input: 10, output: 0, totalTokens: 10 },
+					timestamp: Date.now(),
+					api: "test",
+					provider: "test",
+					model: "test",
+					stopReason: "end_turn",
+				}),
+			})) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
+			const result = await session.ask("Return nothing");
+
+			expect(result.response).toBe("[ERROR: Empty response from API - check API key and credits]");
+
+			const genSpan = recorder.getSpan("gen_ai.chat");
+			expectSpanErrorDetails(genSpan, {
+				errorType: "generation_failed",
+				message: "Empty response from API",
+			});
+		});
+
+		test("compaction error records structured details on the compaction span", async () => {
 			const brokenModel = {
 				id: "broken",
 				provider: "broken",
-				// Missing required fields will cause maybeCompact to throw
 			} as unknown as Model<Api>;
 
 			const session = new Session(
 				createMockRepo(),
 				createMockConfig({
 					model: brokenModel,
-					// Provide a working stream so the ask can complete after compaction fails
 					stream: (() => createMockStreamResult()) as unknown as SessionConfig["stream"],
 				}),
 			);
+			session.replaceMessages([
+				{ role: "user", content: "x".repeat(400_000), timestamp: Date.now() },
+				{ role: "user", content: "y".repeat(400_000), timestamp: Date.now() + 1 },
+			]);
 
-			// This should not throw — compaction errors are caught and logged
 			await session.ask("Will compaction fail?");
 
 			const compSpan = recorder.getSpan("compaction");
 			expect(compSpan).toBeDefined();
+			expect(compSpan?.status.message).toBeTruthy();
 			expect(compSpan?.ended).toBe(true);
-			// If compaction errored, it should have ERROR status
-			// If it didn't error (model was valid enough), it should have OK status
-			// Either way, the span must be ended
+			expectSpanErrorDetails(compSpan, {
+				errorType: "compaction_failed",
+				message: String(compSpan?.status.message),
+			});
+		});
+
+		test("unexpected ask failures record structured details on the ask span", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+
+			await expect(
+				session.ask("Explode", {
+					onProgress: () => {
+						throw new Error("progress exploded");
+					},
+				}),
+			).rejects.toThrow("progress exploded");
+
+			const askSpan = recorder.getSpan("ask");
+			expectSpanErrorDetails(askSpan, {
+				errorType: "unexpected_error",
+				message: "progress exploded",
+			});
 		});
 	});
 });
