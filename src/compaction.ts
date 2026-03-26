@@ -613,7 +613,12 @@ export async function compact(
 	// Append file operations to summary
 	summary += formatFileOperations(readFiles, modifiedFiles);
 
-	const tokensAfter = estimateTokens(createSummaryMessage(summary)) + estimateContextTokens(cutPoint.messagesToKeep);
+	const tokensAfter =
+		estimateTokens({
+			role: "user",
+			content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
+			timestamp: Date.now(),
+		}) + estimateContextTokens(cutPoint.messagesToKeep);
 
 	return {
 		summary,
@@ -623,17 +628,6 @@ export async function compact(
 		tokensAfter,
 		readFiles,
 		modifiedFiles,
-	};
-}
-
-/**
- * Create a user message containing the summary for injection into conversation.
- */
-export function createSummaryMessage(summary: string): Message {
-	return {
-		role: "user",
-		content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
-		timestamp: Date.now(),
 	};
 }
 
@@ -676,17 +670,17 @@ export async function maybeCompact(
 		};
 	}
 
-	console.log(`[compaction] Context tokens (${contextTokens}) exceeds threshold, compacting...`);
-
 	const result = await compact(model, messages, previousSummary, signal);
 
-	console.log(
-		`[compaction] Compacted ${result.tokensBefore} -> ${result.tokensAfter} tokens ` +
-			`(summarized ${messages.length - result.keptMessages.length} messages)`,
-	);
-
 	// Return summary message + kept messages
-	const compactedMessages = [createSummaryMessage(result.summary), ...result.keptMessages];
+	const compactedMessages = [
+		{
+			role: "user" as const,
+			content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${result.summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
+			timestamp: Date.now(),
+		},
+		...result.keptMessages,
+	];
 
 	return {
 		messages: compactedMessages,
@@ -698,155 +692,4 @@ export async function maybeCompact(
 		readFiles: result.readFiles,
 		modifiedFiles: result.modifiedFiles,
 	};
-}
-
-/**
- * Force compaction regardless of context size.
- * Used for manual /compact command.
- */
-export async function forceCompact(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
-	messages: Message[],
-	previousSummary?: string,
-	customInstructions?: string,
-	signal?: AbortSignal,
-): Promise<MaybeCompactResult> {
-	const contextTokens = estimateContextTokens(messages);
-
-	if (messages.length < 2) {
-		// Nothing to compact
-		return {
-			messages,
-			summary: previousSummary,
-			wasCompacted: false,
-			firstKeptOrdinal: 0,
-			tokensBefore: contextTokens,
-			tokensAfter: contextTokens,
-			readFiles: [],
-			modifiedFiles: [],
-		};
-	}
-
-	console.log(`[compaction] Force compacting ${messages.length} messages...`);
-
-	// For force compact, use a smaller keepRecentTokens to ensure we actually compact
-	const settings = { ...getCompactionSettings(), keepRecentTokens: 5000 };
-	const tokensBefore = estimateContextTokens(messages);
-	const cutPoint = findCutPoint(messages, settings);
-
-	if (cutPoint.messagesToSummarize.length === 0 && cutPoint.turnPrefixMessages.length === 0) {
-		// Still nothing to compact - keep at least the last message
-		return {
-			messages,
-			summary: previousSummary,
-			wasCompacted: false,
-			firstKeptOrdinal: 0,
-			tokensBefore: contextTokens,
-			tokensAfter: contextTokens,
-			readFiles: [],
-			modifiedFiles: [],
-		};
-	}
-
-	// Extract file operations
-	const fileOps = createFileOps();
-	for (const msg of cutPoint.messagesToSummarize) {
-		extractFileOpsFromMessage(msg, fileOps);
-	}
-	for (const msg of cutPoint.turnPrefixMessages) {
-		extractFileOpsFromMessage(msg, fileOps);
-	}
-	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-
-	// Generate summary with optional custom instructions
-	let summary: string;
-	if (cutPoint.isSplitTurn && cutPoint.turnPrefixMessages.length > 0) {
-		const [historyResult, turnPrefixResult] = await Promise.all([
-			cutPoint.messagesToSummarize.length > 0
-				? generateSummaryWithInstructions(
-						model,
-						cutPoint.messagesToSummarize,
-						previousSummary,
-						customInstructions,
-						signal,
-					)
-				: Promise.resolve(previousSummary || "No prior history."),
-			generateTurnPrefixSummary(model, cutPoint.turnPrefixMessages, signal),
-		]);
-		summary = `${historyResult}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult}`;
-	} else {
-		summary = await generateSummaryWithInstructions(
-			model,
-			cutPoint.messagesToSummarize,
-			previousSummary,
-			customInstructions,
-			signal,
-		);
-	}
-
-	summary += formatFileOperations(readFiles, modifiedFiles);
-
-	const compactedMessages = [createSummaryMessage(summary), ...cutPoint.messagesToKeep];
-	const tokensAfter = estimateContextTokens(compactedMessages);
-
-	console.log(
-		`[compaction] Force compacted ${tokensBefore} -> ${tokensAfter} tokens ` +
-			`(summarized ${messages.length - cutPoint.messagesToKeep.length} messages)`,
-	);
-
-	return {
-		messages: compactedMessages,
-		summary,
-		wasCompacted: true,
-		firstKeptOrdinal: cutPoint.firstKeptIndex,
-		tokensBefore,
-		tokensAfter,
-		readFiles,
-		modifiedFiles,
-	};
-}
-
-/**
- * Generate summary with optional custom instructions appended.
- */
-async function generateSummaryWithInstructions(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
-	messages: Message[],
-	previousSummary?: string,
-	customInstructions?: string,
-	signal?: AbortSignal,
-): Promise<string> {
-	// Temporarily modify the prompt if custom instructions provided
-	if (customInstructions) {
-		const conversationText = serializeConversation(messages);
-
-		let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
-		if (previousSummary) {
-			promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
-			promptText += UPDATE_SUMMARIZATION_PROMPT;
-		} else {
-			promptText += SUMMARIZATION_PROMPT;
-		}
-		promptText += `\n\nAdditional focus: ${customInstructions}`;
-
-		const response = await completeSimple(model, {
-			systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
-			messages: [{ role: "user", content: promptText, timestamp: Date.now() }],
-		});
-
-		if (response.stopReason === "error" || !response.content || response.content.length === 0) {
-			throw new Error(`Summarization with instructions API error: ${response.errorMessage ?? "unknown error"}`);
-		}
-
-		const text = response.content
-			.filter((b) => b.type === "text")
-			.map((b) => (b as { type: "text"; text: string }).text)
-			.join("");
-
-		return text || "";
-	}
-
-	return generateSummary(model, messages, previousSummary, signal);
 }

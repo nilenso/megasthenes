@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Message } from "@mariozechner/pi-ai";
 import {
-	createSummaryMessage,
 	estimateContextTokens,
 	estimateTokens,
 	findCutPoint,
@@ -204,17 +203,5 @@ describe("findCutPoint", () => {
 
 		// Should be able to cut somewhere
 		expect(result.firstKeptIndex).toBeGreaterThan(0);
-	});
-});
-
-describe("createSummaryMessage", () => {
-	test("creates a user message with summary", () => {
-		const summary = "## Goal\nTest the code";
-		const msg = createSummaryMessage(summary);
-
-		expect(msg.role).toBe("user");
-		expect(typeof msg.content).toBe("string");
-		expect(msg.content).toContain("CONTEXT SUMMARY");
-		expect(msg.content).toContain(summary);
 	});
 });
