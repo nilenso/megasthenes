@@ -50,3 +50,5 @@ docs/src/content/docs/api/
 docs/dist/
 docs/.astro/
 tmp/
+bun.lockb
+deno.lock
