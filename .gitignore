@@ -44,3 +44,11 @@ AGENTS.local.md
 
 # Eval runs
 scripts/eval/reports/
+
+# Docs - auto-generated API reference and build artifacts
+docs/src/content/docs/api/
+docs/dist/
+docs/.astro/
+tmp/
+bun.lockb
+deno.lock

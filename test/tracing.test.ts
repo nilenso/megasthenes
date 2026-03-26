@@ -507,7 +507,7 @@ describe("OTel tracing", () => {
 			expect(names).toEqual(["fd", "rg"]);
 		});
 
-		test("tool spans are children of ask span", async () => {
+		test("tool spans are children of the gen_ai.chat span that triggered them", async () => {
 			let callCount = 0;
 			const streamFn = (() => {
 				callCount++;
@@ -518,9 +518,9 @@ describe("OTel tracing", () => {
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
 			await session.ask("Search");
 
-			const askSpan = recorder.getSpan("ask");
+			const chatSpan = recorder.getSpans("gen_ai.chat")[0];
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
-			expect(toolSpan?.parentSpanId).toBe(askSpan?.spanId);
+			expect(toolSpan?.parentSpanId).toBe(chatSpan?.spanId);
 		});
 	});
 

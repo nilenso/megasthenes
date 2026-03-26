@@ -28,6 +28,7 @@ export interface EvalRow {
 	judge_model: string;
 	ask_system_prompt: string;
 	judge_prompt: string;
+	reasoning_level: string;
 }
 
 // =============================================================================
@@ -60,6 +61,7 @@ const OUTPUT_COLUMNS = [
 	"judge_model",
 	"ask_system_prompt",
 	"judge_prompt",
+	"reasoning_level",
 ] as const;
 
 // =============================================================================

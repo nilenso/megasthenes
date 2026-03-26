@@ -231,5 +231,143 @@ describe("Session", () => {
 
 			expect(streamCalled).toBe(true);
 		});
+
+		test("adaptive thinking uses stream() with thinkingEnabled", async () => {
+			let capturedOptions: unknown;
+			let streamCalled = false;
+			let streamSimpleCalled = false;
+			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
+				streamCalled = true;
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+			const customStreamSimple = ((_model: unknown, _context: unknown, _options?: unknown) => {
+				streamSimpleCalled = true;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					stream: customStream,
+					streamSimple: customStreamSimple,
+					thinking: { type: "adaptive" },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(streamCalled).toBe(true);
+			expect(streamSimpleCalled).toBe(false);
+			expect(capturedOptions).toEqual({ thinkingEnabled: true });
+		});
+
+		test("adaptive thinking with effort passes both to stream()", async () => {
+			let capturedOptions: unknown;
+			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					stream: customStream,
+					thinking: { type: "adaptive", effort: "medium" },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(capturedOptions).toEqual({ thinkingEnabled: true, effort: "medium" });
+		});
+
+		test("effort-based thinking uses streamSimple() with reasoning option", async () => {
+			let capturedOptions: unknown;
+			let streamCalled = false;
+			let streamSimpleCalled = false;
+			const customStream = ((_model: unknown, _context: unknown, _options?: unknown) => {
+				streamCalled = true;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
+				streamSimpleCalled = true;
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					stream: customStream,
+					streamSimple: customStreamSimple,
+					thinking: { effort: "high" },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(streamCalled).toBe(false);
+			expect(streamSimpleCalled).toBe(true);
+			expect(capturedOptions).toEqual({ reasoning: "high" });
+		});
+
+		test("effort-based thinking passes budgetOverrides as thinkingBudgets", async () => {
+			let capturedOptions: unknown;
+			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const repo = createMockRepo();
+			const session = new Session(
+				repo,
+				createMockConfig({
+					streamSimple: customStreamSimple,
+					thinking: { effort: "medium", budgetOverrides: { medium: 8000 } },
+				}),
+			);
+
+			await session.ask("Test");
+
+			expect(capturedOptions).toEqual({ reasoning: "medium", thinkingBudgets: { medium: 8000 } });
+		});
+
+		test("no thinking config uses stream() with no options", async () => {
+			let capturedOptions: unknown = "sentinel";
+			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
+				capturedOptions = options;
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const repo = createMockRepo();
+			const session = new Session(repo, createMockConfig({ stream: customStream }));
+
+			await session.ask("Test");
+
+			expect(capturedOptions).toBeUndefined();
+		});
+
+		test("extracts responseEffort from patched AssistantMessage", async () => {
+			const mockResult = createMockStreamResult();
+			const originalResult = mockResult.result;
+			mockResult.result = async () => {
+				const msg = await originalResult();
+				// Simulate pi-ai patch: outputConfig stashed on AssistantMessage
+				(msg as Record<string, unknown>).outputConfig = { effort: "medium" };
+				return msg;
+			};
+			const customStream = (() => mockResult) as unknown as SessionConfig["stream"];
+
+			const repo = createMockRepo();
+			const session = new Session(repo, createMockConfig({ stream: customStream }));
+
+			const result = await session.ask("Test");
+
+			expect(result.responseEffort).toBe("medium");
+		});
 	});
 });

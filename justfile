@@ -36,3 +36,14 @@ sandbox-down:
 sandbox-logs:
     podman-compose --in-pod=false logs -f
 
+# Run tracing tests
+tracing-tests:
+    bun test test/tracing.test.ts
+
+# Build documentation site
+docs-build:
+    cd docs && bun install && bunx astro build
+
+# Start documentation dev server
+docs-dev:
+    cd docs && bun install && bunx astro dev

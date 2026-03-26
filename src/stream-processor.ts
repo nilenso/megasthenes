@@ -1,4 +1,4 @@
-import type { Api, AssistantMessage, Context, stream as defaultStream, Model } from "@mariozechner/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEventStream, Context, Model } from "@mariozechner/pi-ai";
 import type { OnProgress, ProgressEvent } from "./session";
 
 // =============================================================================
@@ -154,6 +154,17 @@ function handleStreamEvent(
 }
 
 // =============================================================================
+// Stream function type
+// =============================================================================
+
+/** Stream function signature that accepts both stream() and streamSimple(). */
+export type StreamFn = (
+	model: Model<Api>,
+	context: Context,
+	options?: Record<string, unknown>,
+) => AssistantMessageEventStream;
+
+// =============================================================================
 // Main Function
 // =============================================================================
 
@@ -167,15 +178,16 @@ function handleStreamEvent(
  * @returns StreamOutcome - either success with response, or error with details
  */
 export async function processStream(
-	streamFn: typeof defaultStream,
+	streamFn: StreamFn,
 	model: Model<Api>,
 	context: Context,
 	onProgress?: OnProgress,
+	streamOptions?: Record<string, unknown>,
 ): Promise<StreamOutcome> {
 	const toolCallNames = new Map<number, string>();
 
 	try {
-		const eventStream = streamFn(model, context);
+		const eventStream = streamFn(model, context, streamOptions);
 
 		for await (const event of eventStream) {
 			const error = handleStreamEvent(event as RawStreamEvent, toolCallNames, onProgress);

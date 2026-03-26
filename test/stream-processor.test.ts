@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, AssistantMessage, Context, Model } from "@mariozechner/pi-ai";
 import type { ProgressEvent } from "../src/session";
-import { processStream } from "../src/stream-processor";
+import { processStream, type StreamFn } from "../src/stream-processor";
 
 // Mock model and context
 const mockModel = {} as Model<Api>;
@@ -20,7 +20,24 @@ function createMockStreamFn(events: { type: string; [key: string]: unknown }[], 
 			}
 		},
 		result: async () => response,
-	})) as unknown as typeof import("@mariozechner/pi-ai").stream;
+	})) as unknown as StreamFn;
+}
+
+// Helper to create a mock stream function that captures the options it receives
+function createCapturingStreamFn(events: { type: string; [key: string]: unknown }[], response: AssistantMessage) {
+	let capturedOptions: unknown;
+	const streamFn = ((_model: unknown, _context: unknown, options?: unknown) => {
+		capturedOptions = options;
+		return {
+			[Symbol.asyncIterator]: async function* () {
+				for (const event of events) {
+					yield event;
+				}
+			},
+			result: async () => response,
+		};
+	}) as unknown as StreamFn;
+	return { streamFn, getCapturedOptions: () => capturedOptions };
 }
 
 // Helper to create a mock response
@@ -206,7 +223,7 @@ describe("processStream", () => {
 					},
 				}),
 				result: async () => createMockResponse("Never reached"),
-			})) as unknown as typeof import("@mariozechner/pi-ai").stream;
+			})) as unknown as StreamFn;
 
 			const outcome = await processStream(streamFn, mockModel, mockContext);
 
@@ -265,6 +282,30 @@ describe("processStream", () => {
 			const outcome = await processStream(streamFn, mockModel, mockContext);
 
 			expect(outcome.ok).toBe(true);
+		});
+	});
+
+	describe("stream options", () => {
+		test("forwards streamOptions to streamFn", async () => {
+			const events = [{ type: "text_delta", delta: "Hello" }];
+			const response = createMockResponse("Hello");
+			const { streamFn, getCapturedOptions } = createCapturingStreamFn(events, response);
+
+			const streamOptions = { thinkingEnabled: true };
+			const outcome = await processStream(streamFn, mockModel, mockContext, undefined, streamOptions);
+
+			expect(outcome.ok).toBe(true);
+			expect(getCapturedOptions()).toEqual(streamOptions);
+		});
+
+		test("passes undefined when no streamOptions provided", async () => {
+			const events = [{ type: "text_delta", delta: "Hello" }];
+			const response = createMockResponse("Hello");
+			const { streamFn, getCapturedOptions } = createCapturingStreamFn(events, response);
+
+			await processStream(streamFn, mockModel, mockContext);
+
+			expect(getCapturedOptions()).toBeUndefined();
 		});
 	});
 });
