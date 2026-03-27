@@ -1,10 +1,35 @@
-import { describe, expect, test } from "bun:test";
-import type { Message } from "@mariozechner/pi-ai";
+import { describe, expect, mock, test } from "bun:test";
+import type { Api, Message, Model } from "@mariozechner/pi-ai";
+
+const mockSummaryText = "Mock summary of conversation";
+
+mock.module("@mariozechner/pi-ai", () => ({
+	completeSimple: async () => ({
+		role: "assistant",
+		content: [{ type: "text", text: mockSummaryText }],
+		stopReason: "end_turn",
+		api: "messages",
+		provider: "anthropic",
+		model: "test",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		timestamp: Date.now(),
+	}),
+}));
+
 import {
+	compact,
 	estimateContextTokens,
 	estimateTokens,
 	findCutPoint,
 	getCompactionSettings,
+	maybeCompact,
 	serializeConversation,
 	shouldCompact,
 } from "../src/compaction";
@@ -36,6 +61,48 @@ function makeAssistantMessage(text: string): Message {
 		timestamp: Date.now(),
 	};
 }
+
+function makeAssistantWithToolCall(toolName: string, args: Record<string, unknown>): Message {
+	return {
+		role: "assistant",
+		content: [{ type: "toolCall", id: "tc-1", name: toolName, arguments: args }],
+		api: "messages" as never,
+		provider: "anthropic" as never,
+		model: "test",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "toolUse",
+		timestamp: Date.now(),
+	};
+}
+
+function makeLargeConversation(turnCount: number, charsPerMessage: number): Message[] {
+	const messages: Message[] = [];
+	for (let i = 0; i < turnCount; i++) {
+		messages.push(makeUserMessage(`Q${i}: ${"x".repeat(charsPerMessage)}`));
+		messages.push(makeAssistantMessage(`A${i}: ${"y".repeat(charsPerMessage)}`));
+	}
+	return messages;
+}
+
+const mockModel = {
+	id: "test-model",
+	name: "Test",
+	api: "messages",
+	provider: "anthropic",
+	baseUrl: "",
+	reasoning: false,
+	input: ["text"],
+	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+	contextWindow: 200000,
+	maxTokens: 4096,
+} as unknown as Model<Api>;
 
 describe("estimateTokens", () => {
 	test("estimates user message tokens", () => {
@@ -203,5 +270,86 @@ describe("findCutPoint", () => {
 
 		// Should be able to cut somewhere
 		expect(result.firstKeptIndex).toBeGreaterThan(0);
+	});
+});
+
+describe("computeFileLists (indirect via compact)", () => {
+	test("file read in summarized portion is tracked as read-only", async () => {
+		const messages: Message[] = [
+			makeUserMessage("Read the config file"),
+			makeAssistantWithToolCall("read", { path: "/src/config.ts" }),
+			makeAssistantMessage("Here is the config file content."),
+			...makeLargeConversation(100, 4000),
+		];
+
+		const result = await compact(mockModel, messages);
+
+		expect(result.readFiles).toContain("/src/config.ts");
+		expect(result.modifiedFiles).not.toContain("/src/config.ts");
+	});
+});
+
+describe("compact", () => {
+	test("returns summary and kept messages when messages exceed keepRecentTokens", async () => {
+		const messages = makeLargeConversation(200, 4000);
+
+		const result = await compact(mockModel, messages);
+
+		expect(result.keptMessages.length).toBeLessThan(messages.length);
+		expect(result.keptMessages.length).toBeGreaterThan(0);
+		expect(result.firstKeptIndex).toBeGreaterThan(0);
+		expect(result.tokensBefore).toBeGreaterThan(result.tokensAfter);
+		expect(result.summary).toContain(mockSummaryText);
+		expect(result.keptMessages[0]).toBe(messages[result.firstKeptIndex]);
+		const firstKept = result.keptMessages[0];
+		expect(firstKept).toBeDefined();
+		expect(["user", "assistant"]).toContain(firstKept?.role);
+	});
+
+	test("returns original messages when nothing to compact", async () => {
+		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi there!")];
+
+		const result = await compact(mockModel, messages);
+
+		expect(result.keptMessages).toEqual(messages);
+		expect(result.firstKeptIndex).toBe(0);
+		expect(result.tokensBefore).toBe(result.tokensAfter);
+		expect(result.readFiles).toEqual([]);
+		expect(result.modifiedFiles).toEqual([]);
+	});
+});
+
+describe("maybeCompact", () => {
+	test("returns wasCompacted=false when under threshold", async () => {
+		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(false);
+		expect(result.messages).toBe(messages);
+	});
+
+	test("returns wasCompacted=true with summary prepended when over threshold", async () => {
+		const messages = makeLargeConversation(200, 4000);
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(true);
+		const firstMsg = result.messages[0];
+		expect(firstMsg).toBeDefined();
+		expect(typeof firstMsg?.content).toBe("string");
+		expect((firstMsg?.content as string)).toContain("[CONTEXT SUMMARY");
+		expect((firstMsg?.content as string)).toContain("[END CONTEXT SUMMARY");
+		expect(result.messages.length).toBeLessThan(messages.length);
+		expect((result.summary ?? "").length).toBeGreaterThan(0);
+	});
+
+	test("passes previousSummary through when under threshold", async () => {
+		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
+		const previousSummary = "Previous session summary content";
+
+		const result = await maybeCompact(mockModel, messages, previousSummary);
+
+		expect(result.summary).toBe(previousSummary);
 	});
 });
