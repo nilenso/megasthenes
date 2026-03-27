@@ -41,15 +41,15 @@ describe("estimateTokens", () => {
 	test("estimates user message tokens", () => {
 		const msg = makeUserMessage("Hello, how are you?");
 		const tokens = estimateTokens(msg);
-		// "Hello, how are you?" = 19 chars, ~5 tokens
-		expect(tokens).toBeGreaterThan(0);
-		expect(tokens).toBeLessThan(20);
+		// "Hello, how are you?" = 19 chars -> Math.ceil(19/4) = 5
+		expect(tokens).toBe(5);
 	});
 
 	test("estimates assistant message tokens", () => {
 		const msg = makeAssistantMessage("I'm doing well, thank you for asking!");
 		const tokens = estimateTokens(msg);
-		expect(tokens).toBeGreaterThan(0);
+		// 37 chars -> Math.ceil(37/4) = 10
+		expect(tokens).toBe(10);
 	});
 });
 
@@ -82,6 +82,13 @@ describe("shouldCompact", () => {
 		const settings = { ...getCompactionSettings(), enabled: false };
 		const tokens = 999999;
 		expect(shouldCompact(tokens, settings)).toBe(false);
+	});
+
+	test("returns true at exact boundary (contextWindow - reserveTokens + 1)", () => {
+		const settings = getCompactionSettings();
+		const boundary = settings.contextWindow - settings.reserveTokens;
+		expect(shouldCompact(boundary, settings)).toBe(false);
+		expect(shouldCompact(boundary + 1, settings)).toBe(true);
 	});
 });
 
@@ -154,12 +161,8 @@ describe("findCutPoint", () => {
 		expect(result.messagesToSummarize.length).toBeGreaterThan(0);
 
 		// First kept message should be a user message (turn boundary)
-		if (result.messagesToKeep.length > 0) {
-			const firstKept = result.messagesToKeep[0];
-			if (firstKept) {
-				expect(firstKept.role).toBe("user");
-			}
-		}
+		expect(result.messagesToKeep.length).toBeGreaterThan(0);
+		expect(result.messagesToKeep[0]!.role).toBe("user");
 	});
 
 	test("handles split turn when single turn exceeds budget", () => {
@@ -177,15 +180,12 @@ describe("findCutPoint", () => {
 		const result = findCutPoint(messages, settings);
 
 		// Should detect split turn
-		if (result.isSplitTurn) {
-			expect(result.turnStartIndex).toBe(0); // First user message
-			expect(result.turnPrefixMessages.length).toBeGreaterThan(0);
-			// First kept message should be an assistant message (mid-turn cut)
-			const firstKept = result.messagesToKeep[0];
-			if (firstKept) {
-				expect(firstKept.role).toBe("assistant");
-			}
-		}
+		expect(result.isSplitTurn).toBe(true);
+		expect(result.turnStartIndex).toBe(0); // First user message
+		expect(result.turnPrefixMessages.length).toBeGreaterThan(0);
+		// First kept message should be an assistant message (mid-turn cut)
+		expect(result.messagesToKeep.length).toBeGreaterThan(0);
+		expect(result.messagesToKeep[0]!.role).toBe("assistant");
 	});
 
 	test("can cut at assistant message boundaries", () => {

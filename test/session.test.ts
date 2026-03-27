@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { Repo } from "../src/forge";
 import { type Logger, nullLogger } from "../src/logger";
-import { Session, type SessionConfig } from "../src/session";
+import { type Message, Session, type SessionConfig } from "../src/session";
 
 // Mock repo for testing
 function createMockRepo(): Repo {
@@ -130,9 +130,8 @@ describe("Session", () => {
 			const repo = createMockRepo();
 			const session = new Session(repo, createMockConfig());
 
-			expect(session.id).toBeDefined();
 			expect(typeof session.id).toBe("string");
-			expect(session.id.length).toBeGreaterThan(0);
+			expect(session.id).not.toBe("");
 		});
 
 		test("creates session with provided repo", () => {
@@ -173,6 +172,36 @@ describe("Session", () => {
 			expect(session.getMessages()).toEqual(messages);
 		});
 
+		test("after ask(), messages contain both user and assistant messages", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			await session.ask("Hello");
+			const messages = session.getMessages();
+			expect(messages.length).toBe(2); // user + assistant
+			expect(messages[0]?.role).toBe("user");
+			expect(messages[1]?.role).toBe("assistant");
+		});
+
+		test("multi-turn ask() accumulates messages correctly", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			await session.ask("First question");
+			await session.ask("Second question");
+			await session.ask("Third question");
+			const messages = session.getMessages();
+			// Each ask adds 1 user + 1 assistant = 2 messages per turn
+			expect(messages.length).toBe(6);
+		});
+
+		test("getMessages() returns history after close()", async () => {
+			const { logger } = createCapturingLogger();
+			const session = new Session(createMockRepo(), createMockConfig({ logger }));
+			await session.ask("Hello");
+			const messagesBefore = session.getMessages().length;
+			await session.close();
+			const messagesAfter = session.getMessages();
+			expect(messagesAfter.length).toBe(messagesBefore);
+			expect(messagesAfter[0]?.content).toBe("Hello");
+		});
+
 		test("replaceMessages overwrites existing messages", () => {
 			const repo = createMockRepo();
 			const session = new Session(repo, createMockConfig());
@@ -196,6 +225,15 @@ describe("Session", () => {
 			session.close();
 			session.close();
 			session.close();
+		});
+
+		test("close() attempts worktree cleanup and logs on failure", async () => {
+			const { logger, errors } = createCapturingLogger();
+			const repo = createMockRepo();
+			const session = new Session(repo, createMockConfig({ logger }));
+			await session.close();
+			// cleanupWorktree fails because /tmp/test-repo doesn't exist, so error is logged
+			expect(errors.some((e) => e.includes("Failed to cleanup worktree"))).toBe(true);
 		});
 
 		test("ask throws after close", async () => {
@@ -250,7 +288,7 @@ describe("Session", () => {
 			await session.ask("Test question");
 
 			const messages = session.getMessages();
-			expect(messages.length).toBeGreaterThanOrEqual(1);
+			expect(messages.length).toBe(2);
 			expect(messages[0]?.role).toBe("user");
 			expect(messages[0]?.content).toBe("Test question");
 		});
@@ -422,6 +460,168 @@ describe("Session", () => {
 			expect(capturedOptions).toBeUndefined();
 		});
 
+		test("tool calls are dispatched to config.executeTool", async () => {
+			const executedTools: { name: string; args: Record<string, unknown> }[] = [];
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async (name, args) => {
+						executedTools.push({ name, args });
+						return "tool output";
+					},
+				}),
+			);
+
+			await session.ask("Search for test");
+			expect(executedTools).toHaveLength(1);
+			expect(executedTools[0]?.name).toBe("rg");
+			expect(executedTools[0]?.args).toEqual({ pattern: "test" });
+		});
+
+		test("tool results appear as toolResult messages in history", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "search results here",
+				}),
+			);
+
+			await session.ask("Search");
+			const toolResults = session.getMessages().filter((m) => m.role === "toolResult");
+			expect(toolResults).toHaveLength(1);
+			expect(toolResults[0]?.toolName).toBe("rg");
+			expect((toolResults[0]?.content[0] as { text?: string })?.text).toBe("search results here");
+			expect(toolResults[0]?.isError).toBe(false);
+		});
+
+		test("result.toolCalls records all tool calls", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([
+						{ name: "rg", arguments: { pattern: "foo" } },
+						{ name: "fd", arguments: { pattern: "bar" } },
+					]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "result",
+				}),
+			);
+
+			const result = await session.ask("Find files");
+			expect(result.toolCalls).toHaveLength(2);
+			expect(result.toolCalls[0]?.name).toBe("rg");
+			expect(result.toolCalls[1]?.name).toBe("fd");
+		});
+
+		test("multiple tool calls execute in parallel", async () => {
+			const execLog: { name: string; start: number; end: number }[] = [];
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([
+						{ name: "tool1", arguments: {} },
+						{ name: "tool2", arguments: {} },
+						{ name: "tool3", arguments: {} },
+					]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async (name) => {
+						const start = Date.now();
+						await Bun.sleep(50);
+						execLog.push({ name, start, end: Date.now() });
+						return "done";
+					},
+				}),
+			);
+
+			await session.ask("Run tools");
+
+			// Verify all 3 tools executed
+			expect(execLog).toHaveLength(3);
+			// Verify at least two tools overlapped in time (proves parallelism)
+			// Sort by start time and check if any tool started before a previous one ended
+			execLog.sort((a, b) => a.start - b.start);
+			const hasOverlap = execLog.some((entry, i) => i > 0 && entry.start < execLog[i - 1]!.end);
+			expect(hasOverlap).toBe(true);
+		});
+
+		test("returns max-iterations error after exhausting iterations", async () => {
+			const customStream = (() =>
+				createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }])) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					maxIterations: 2,
+					stream: customStream,
+				}),
+			);
+
+			const result = await session.ask("Do something");
+			expect(result.response).toContain("Max iterations reached");
+		});
+
+		test("usage accumulates across iterations", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "result",
+				}),
+			);
+
+			const result = await session.ask("Search");
+			// Iteration 1: input 100, output 30, total 130
+			// Iteration 2: input 10, output 5, total 15
+			expect(result.usage.inputTokens).toBe(110);
+			expect(result.usage.outputTokens).toBe(35);
+			expect(result.usage.totalTokens).toBe(145);
+		});
+
 		test("extracts responseEffort from patched AssistantMessage", async () => {
 			const mockResult = createMockStreamResult();
 			const originalResult = mockResult.result;
@@ -439,6 +639,107 @@ describe("Session", () => {
 			const result = await session.ask("Test");
 
 			expect(result.responseEffort).toBe("medium");
+		});
+	});
+
+	describe("compaction integration", () => {
+		function createLargeContext(): Message[] {
+			const bigContent = "x".repeat(400000);
+			return [
+				{ role: "user", content: bigContent, timestamp: Date.now() },
+				{
+					role: "assistant",
+					content: [{ type: "text", text: bigContent }],
+					timestamp: Date.now(),
+					api: "test",
+					provider: "test",
+					model: "test",
+					stopReason: "end_turn",
+					usage: { input: 0, output: 0, totalTokens: 0 },
+				} as unknown as Message,
+				{ role: "user", content: "second question", timestamp: Date.now() },
+				{
+					role: "assistant",
+					content: [{ type: "text", text: "second answer" }],
+					timestamp: Date.now(),
+					api: "test",
+					provider: "test",
+					model: "test",
+					stopReason: "end_turn",
+					usage: { input: 0, output: 0, totalTokens: 0 },
+				} as unknown as Message,
+			];
+		}
+
+		test("ask() succeeds when compaction is triggered by large context", async () => {
+			// Context exceeds compaction threshold (~200k tokens).
+			// Compaction may succeed (if mock.module is active from other tests)
+			// or fail (if real completeSimple is used with mock model).
+			// Either way, ask() must succeed — compaction errors are caught.
+			const { logger, logs, errors } = createCapturingLogger();
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({ logger }),
+			);
+			session.replaceMessages(createLargeContext());
+
+			const result = await session.ask("Hello");
+			expect(result.response).toBe("Hello world");
+			// Compaction was attempted: either logged success or caught error
+			const allOutput = [...logs, ...errors];
+			expect(allOutput.some((e) => e.includes("[compaction]"))).toBe(true);
+		});
+
+		test("ask() succeeds when context is below compaction threshold", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			session.replaceMessages([
+				{ role: "user", content: "short question", timestamp: Date.now() },
+			]);
+			const result = await session.ask("Hello");
+			expect(result.response).toBe("Hello world");
+		});
+	});
+
+	describe("concurrency", () => {
+		test("concurrent ask() calls are serialized (q2 waits for q1)", async () => {
+			const order: string[] = [];
+			let streamCalls = 0;
+
+			const customStream = (() => {
+				streamCalls++;
+				const n = streamCalls;
+				return {
+					[Symbol.asyncIterator]: async function* () {
+						order.push(`stream-start-${n}`);
+						await Bun.sleep(30);
+						order.push(`stream-end-${n}`);
+						yield { type: "text_delta", delta: `response ${n}` };
+					},
+					result: async () => ({
+						role: "assistant" as const,
+						content: [{ type: "text" as const, text: `response ${n}` }],
+						usage: { input: 10, output: 5, totalTokens: 15 },
+						timestamp: Date.now(),
+						api: "test",
+						provider: "test",
+						model: "test",
+						stopReason: "end_turn",
+					}),
+				};
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+
+			// Launch both asks concurrently — do NOT await the first
+			const p1 = session.ask("q1");
+			const p2 = session.ask("q2");
+			await Promise.all([p1, p2]);
+
+			// If serialized: q1 fully completes before q2 starts
+			expect(order).toEqual([
+				"stream-start-1", "stream-end-1",
+				"stream-start-2", "stream-end-2",
+			]);
 		});
 	});
 });
