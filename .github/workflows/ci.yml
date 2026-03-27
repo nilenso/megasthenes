@@ -18,6 +18,14 @@ jobs:
 
       - run: bun install
 
+      - name: Install rg/fd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find
+          sudo ln -sf "$(which fdfind)" /usr/local/bin/fd
+          rg --version
+          fd --version
+
       - name: Check (lint + format)
         run: bunx biome check .
 
