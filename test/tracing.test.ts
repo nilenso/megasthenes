@@ -708,7 +708,10 @@ describe("OTel tracing", () => {
 
 			await session.ask("Will compaction fail?");
 
-			const compSpan = recorder.getSpan("compaction");
+			const compSpan = recorder
+				.getSpans("compaction")
+				.reverse()
+				.find((span) => span.attributes["error.type"] === "compaction_failed");
 			expect(compSpan).toBeDefined();
 			expect(typeof compSpan?.status.message).toBe("string");
 			expect((compSpan?.status.message ?? "").length).toBeGreaterThan(0);
