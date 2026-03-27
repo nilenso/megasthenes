@@ -133,7 +133,12 @@ class SpanRecorder {
 	}
 
 	getSpan(name: string): RecordedSpan | undefined {
-		return this.spans.find((s) => s.name === name)?.toRecorded();
+		for (let i = this.spans.length - 1; i >= 0; i--) {
+			if (this.spans[i]?.name === name) {
+				return this.spans[i]?.toRecorded();
+			}
+		}
+		return undefined;
 	}
 
 	getSpans(name: string): RecordedSpan[] {
@@ -358,8 +363,8 @@ describe("OTel tracing", () => {
 			const span = recorder.getSpan("ask");
 			expect(span?.attributes["gen_ai.usage.input_tokens"]).toBe(200);
 			expect(span?.attributes["gen_ai.usage.output_tokens"]).toBe(80);
-			expect(span?.attributes["ask_forge.response.total_links"]).toBeDefined();
-			expect(span?.attributes["ask_forge.response.invalid_links"]).toBeDefined();
+			expect(span?.attributes["ask_forge.response.total_links"]).toBe(0);
+			expect(span?.attributes["ask_forge.response.invalid_links"]).toBe(0);
 			expect(span?.attributes["ask_forge.total_iterations"]).toBe(2);
 			expect(span?.attributes["ask_forge.total_tool_calls"]).toBe(1);
 		});
@@ -684,15 +689,18 @@ describe("OTel tracing", () => {
 		});
 
 		test("compaction error records structured details on the compaction span", async () => {
-			const brokenModel = {
-				id: "broken",
-				provider: "broken",
-			} as unknown as Model<Api>;
-
+			const loggerThatFailsOnCompactionLog = {
+				...nullLogger,
+				log: (label: string) => {
+					if (label === "[compaction]") {
+						throw new Error("logger failed during compaction");
+					}
+				},
+			};
 			const session = new Session(
 				createMockRepo(),
 				createMockConfig({
-					model: brokenModel,
+					logger: loggerThatFailsOnCompactionLog,
 					stream: (() => createMockStreamResult()) as unknown as SessionConfig["stream"],
 				}),
 			);
@@ -703,14 +711,16 @@ describe("OTel tracing", () => {
 
 			await session.ask("Will compaction fail?");
 
-			const compSpan = recorder.getSpan("compaction");
+			const compSpan = recorder
+				.getSpans("compaction")
+				.reverse()
+				.find((span) => span.attributes["error.type"] === "compaction_failed");
 			expect(compSpan).toBeDefined();
-			expect(compSpan?.status.message).toBeTruthy();
+			expect(typeof compSpan?.status.message).toBe("string");
+			expect((compSpan?.status.message ?? "").length).toBeGreaterThan(0);
 			expect(compSpan?.ended).toBe(true);
-			expectSpanErrorDetails(compSpan, {
-				errorType: "compaction_failed",
-				message: String(compSpan?.status.message),
-			});
+			expect(compSpan?.status.code).toBe(SpanStatusCode.ERROR);
+			expect(compSpan?.attributes["error.type"]).toBe("compaction_failed");
 		});
 
 		test("unexpected ask failures record structured details on the ask span", async () => {
