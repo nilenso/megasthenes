@@ -66,7 +66,8 @@ function parseArgs(argv: string[]): CliArgs {
 	let quiet = false;
 
 	for (let i = 0; i < argv.length; i++) {
-		const arg = argv[i]!;
+		const arg = argv[i];
+		if (!arg) continue;
 
 		if (arg === "-h" || arg === "--help") {
 			printUsage();
@@ -103,9 +104,14 @@ function parseArgs(argv: string[]): CliArgs {
 		process.exit(1);
 	}
 
+	const [repo, question] = positional;
+	if (!repo || !question) {
+		die("Missing required arguments: <repo-url> <question>");
+	}
+
 	return {
-		repo: positional[0]!,
-		question: positional[1]!,
+		repo,
+		question,
 		commitish,
 		provider,
 		model,

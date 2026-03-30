@@ -237,11 +237,22 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {})
 	await mkdir(resolve(basePath, "trees"), { recursive: true });
 	const worktreeProc = Bun.spawn(["git", "worktree", "add", worktreePath, sha], {
 		cwd: cachePath,
-		stdout: "inherit",
-		stderr: "inherit",
+		stdout: "pipe",
+		stderr: "pipe",
 	});
 	const worktreeExit = await worktreeProc.exited;
 	if (worktreeExit !== 0) {
+		// Another concurrent call may have created the worktree between our exists()
+		// check and the worktree add. If so, just return it.
+		if (await exists(worktreePath)) {
+			return {
+				url: repoUrl,
+				localPath: worktreePath,
+				forge,
+				commitish: sha,
+				cachePath: resolve(cachePath),
+			};
+		}
 		throw new Error(`git worktree add failed with exit code ${worktreeExit}`);
 	}
 

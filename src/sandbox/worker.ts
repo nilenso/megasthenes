@@ -12,7 +12,7 @@
  */
 
 import { closeSync, openSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { isolatedGitCommand, isolatedGitToolCommand, isolatedToolCommand } from "./isolation";
 
 /** Path to seccomp BPF filter that blocks network sockets (arch-specific) */
@@ -142,11 +142,15 @@ function slugify(url: string): string {
 
 /** Validate path stays within worktree root. */
 function validatePath(worktree: string, userPath: string): string | null {
-	const full = resolve(worktree, userPath);
-	if (!full.startsWith(resolve(worktree))) {
+	const worktreeRoot = resolve(worktree);
+	const fullPath = resolve(worktreeRoot, userPath);
+	const relPath = relative(worktreeRoot, fullPath);
+
+	if (relPath.startsWith("..") || isAbsolute(relPath)) {
 		return null;
 	}
-	return full;
+
+	return fullPath;
 }
 
 /** Run a git command with filesystem + PID isolation. */
@@ -462,7 +466,7 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 			const path = (args.path as string) || ".";
 			const fullPath = validatePath(worktree, path);
 			if (!fullPath) {
-				return Response.json({ ok: false, error: `path traversal not allowed: ${path}` }, { status: 400 });
+				return Response.json({ ok: false, error: `invalid project path: ${path}` }, { status: 400 });
 			}
 			const result = await runToolIsolated(["ls", "-la", fullPath], worktree);
 			if (result.exitCode !== 0) {
@@ -477,7 +481,7 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 			const path = args.path as string;
 			const fullPath = validatePath(worktree, path);
 			if (!fullPath) {
-				return Response.json({ ok: false, error: `path traversal not allowed: ${path}` }, { status: 400 });
+				return Response.json({ ok: false, error: `invalid project path: ${path}` }, { status: 400 });
 			}
 			const result = await runToolIsolated(["cat", fullPath], worktree);
 			if (result.exitCode !== 0) {

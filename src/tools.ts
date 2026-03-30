@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { Tool } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 
@@ -119,6 +119,18 @@ async function runCommand(cmd: string[], cwd: string): Promise<string> {
 	return stdout || "(no output)";
 }
 
+function validateProjectPath(repoPath: string, userPath: string): string | null {
+	const repoRoot = resolve(repoPath);
+	const fullPath = resolve(repoRoot, userPath);
+	const relPath = relative(repoRoot, fullPath);
+
+	if (relPath.startsWith("..") || isAbsolute(relPath)) {
+		return null;
+	}
+
+	return fullPath;
+}
+
 async function executeRg(args: Record<string, unknown>, repoPath: string): Promise<string> {
 	const pattern = args.pattern as string;
 	const glob = args.glob as string | undefined;
@@ -195,12 +207,20 @@ async function executeFd(args: Record<string, unknown>, repoPath: string): Promi
 
 async function executeLs(args: Record<string, unknown>, repoPath: string): Promise<string> {
 	const path = (args.path as string | undefined) || ".";
-	return runCommand(["ls", "-la", path], repoPath);
+	const fullPath = validateProjectPath(repoPath, path);
+	if (!fullPath) {
+		return `Error: invalid project path: ${path}`;
+	}
+
+	return runCommand(["ls", "-la", fullPath], repoPath);
 }
 
 async function executeRead(args: Record<string, unknown>, repoPath: string): Promise<string> {
 	const filePath = args.path as string;
-	const fullPath = join(repoPath, filePath);
+	const fullPath = validateProjectPath(repoPath, filePath);
+	if (!fullPath) {
+		return `Error: invalid project path: ${filePath}`;
+	}
 
 	try {
 		const content = await readFile(fullPath, "utf-8");
