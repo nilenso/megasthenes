@@ -54,19 +54,21 @@ Rubric:
   - links without line anchors
   - links to other repositories
   If the answer contains zero code references, return "yes".
-- is_reasoning_sound = "yes" only if every causal claim, step-by-step explanation,
-  and conclusion in the answer is internally consistent and follows logically from
-  the evidence the answer itself presents.
+- is_reasoning_sound = "yes" only if the answer is logically coherent and the logic within the answer is internally
+  consistent — i.e. the causal claims, step-by-step explanations, and conclusions do not contradict
+  each other or the evidence the answer itself presents.
   Return "no" if any of the following are true:
+  - Two statements in the answer contradict each other (e.g. the title/intro
+    asserts one verdict but the body or conclusion asserts the opposite).
   - A conclusion contradicts the quoted or linked evidence (e.g. the code shown
     disproves the claim made about it).
   - A causal chain has a missing or broken step (e.g. "A therefore C" with no
     explanation of B).
   - The answer cites evidence for scenario X to support a claim about scenario Y,
     where the two scenarios are meaningfully different.
-  - Two statements in the answer contradict each other.
-  Do NOT penalise omissions or incomplete coverage here — only internal
-  inconsistency between what is stated and what the cited evidence supports.
+  Only mark is_reasoning_sound = "no" when the answer's own statements or
+  cited evidence conflict with each other — not merely because evidence is
+  absent or unverifiable.
 
 misc_feedback format:
 - Write feedback as a bullet-point list (one bullet per observation).
