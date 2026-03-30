@@ -452,4 +452,3 @@ Open `scripts/eval/eval-viewer.html` in a browser to visualise eval results.
 **Single run:** Drag and drop a results CSV into the "Current Run" zone and click "View Report" to browse questions, answers, verdicts, tool calls, and broken link ratios.
 
 **Comparing runs:** Drag a previous run CSV into the "Previous Run" zone as well. The viewer highlights regressions, improvements, and structural differences between the two runs side by side.
-For configuration, sandboxing, observability, and the full API reference, see the [documentation](https://nilenso.github.io/ask-forge/).
