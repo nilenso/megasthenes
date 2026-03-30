@@ -11,11 +11,11 @@ COPY isolation/seccomp/ /build/
 WORKDIR /build
 
 # Build the BPF filter generator and generate the filter
+# Detect architecture: map to x64/arm64 for seccomp-net-block
 RUN gcc -o seccomp-net-block seccomp-net-block.c -lseccomp \
-    && ./seccomp-net-block /build/net-block.bpf
-
-# Build apply-seccomp (static binary for portability)
-RUN gcc -static -O2 -o apply-seccomp apply-seccomp.c
+    && ARCH=$(uname -m) \
+    && if [ "$ARCH" = "x86_64" ]; then ARCH="x64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi \
+    && ./seccomp-net-block "$ARCH" /build/net-block.bpf
 
 # --- Runtime stage ---
 FROM oven/bun:1-alpine
@@ -32,10 +32,12 @@ RUN apk add --no-cache \
     && mkdir -p /home/forge/repos \
     && chown -R forge:forge /home/forge
 
-# Copy seccomp binaries and filter from builder
-COPY --from=builder /build/apply-seccomp /usr/local/bin/apply-seccomp
-COPY --from=builder /build/net-block.bpf /etc/seccomp/net-block.bpf
-RUN chmod +x /usr/local/bin/apply-seccomp
+# Copy seccomp BPF filter from builder (arch-specific path expected by worker.ts)
+COPY --from=builder /build/net-block.bpf /tmp/net-block.bpf
+RUN ARCH=$(uname -m) \
+    && if [ "$ARCH" = "x86_64" ]; then ARCH="x64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi \
+    && mkdir -p /etc/seccomp/$ARCH \
+    && mv /tmp/net-block.bpf /etc/seccomp/$ARCH/net-block.bpf
 
 COPY worker.ts /app/worker.ts
 COPY isolation/index.ts /app/isolation/index.ts
