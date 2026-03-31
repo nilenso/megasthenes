@@ -483,7 +483,7 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 			if (!fullPath) {
 				return Response.json({ ok: false, error: `invalid project path: ${path}` }, { status: 400 });
 			}
-			const result = await runToolIsolated(["cat", fullPath], worktree);
+			const result = await runToolIsolated(["cat", "-n", fullPath], worktree);
 			if (result.exitCode !== 0) {
 				return Response.json(
 					{ ok: false, error: `read failed (exit ${result.exitCode}):\n${result.stderr}` },
