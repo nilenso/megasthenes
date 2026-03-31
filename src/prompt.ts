@@ -54,19 +54,21 @@ Rubric:
   - links without line anchors
   - links to other repositories
   If the answer contains zero code references, return "yes".
-- is_reasoning_sound = "yes" only if every causal claim, step-by-step explanation,
-  and conclusion in the answer is internally consistent and follows logically from
-  the evidence the answer itself presents.
+- is_reasoning_sound = "yes" only if the answer is logically coherent and the logic within the answer is internally
+  consistent — i.e. the causal claims, step-by-step explanations, and conclusions do not contradict
+  each other or the evidence the answer itself presents.
   Return "no" if any of the following are true:
+  - Two statements in the answer contradict each other (e.g. the title/intro
+    asserts one verdict but the body or conclusion asserts the opposite).
   - A conclusion contradicts the quoted or linked evidence (e.g. the code shown
     disproves the claim made about it).
   - A causal chain has a missing or broken step (e.g. "A therefore C" with no
     explanation of B).
   - The answer cites evidence for scenario X to support a claim about scenario Y,
     where the two scenarios are meaningfully different.
-  - Two statements in the answer contradict each other.
-  Do NOT penalise omissions or incomplete coverage here — only internal
-  inconsistency between what is stated and what the cited evidence supports.
+  Only mark is_reasoning_sound = "no" when the answer's own statements or
+  cited evidence conflict with each other — not merely because evidence is
+  absent or unverifiable.
 
 misc_feedback format:
 - Write feedback as a bullet-point list (one bullet per observation).
@@ -104,6 +106,10 @@ Response content guidelines:
 - Format your response as GitHub Flavored Markdown (GFM): use headings, bullet points, numbered lists, fenced code blocks, and markdown links.
 - If you don't know the answer or cannot find supporting evidence in the codebase, say so explicitly. Never speculate or fabricate claims.
 - When you encounter code that appears deprecated or legacy — indicated by DEPRECATED/TODO/FIXME comments, names like legacy_*, old_*, or being visibly superseded by a newer file covering the same concern — say so explicitly. Never present deprecated code as the current behaviour.
+
+Reasoning and correctness guidelines:
+- Present evidence and reasoning BEFORE stating conclusions. Show the code, quote the values, walk through the logic step by step — then state the result. Never lead with a final answer and backfill justification.
+- Before outputting your response, check that every statement is consistent with every other statement. If any two parts of your response contradict each other — different numbers, opposite conclusions, or a summary that doesn't match the evidence — fix the contradiction before responding.
 
 Evidence and linking guidelines:
 - The blob base URL for this repository is: ${blobBase}
