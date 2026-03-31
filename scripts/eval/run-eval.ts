@@ -1,6 +1,21 @@
 import "dotenv/config";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
+
+// Register OTel tracer provider — sends traces to any OTLP-compatible collector
+const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+if (!otlpEndpoint) {
+	console.warn("⚠ OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is not set — tracing disabled");
+}
+const provider = new NodeTracerProvider({
+	spanProcessors: otlpEndpoint
+		? [new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpEndpoint }))]
+		: [],
+});
+provider.register();
 import { completeSimple, getModel, type ThinkingLevel } from "@mariozechner/pi-ai";
 import { MAX_TOOL_ITERATIONS, MODEL_NAME, MODEL_PROVIDER, type ThinkingConfig } from "../../src/config";
 import { AskForgeClient, buildDefaultSystemPrompt, nullLogger } from "../../src/index";
@@ -279,3 +294,4 @@ if (values.thinking === "adaptive") {
 }
 
 await runEval(inputPath, thinking);
+await provider.shutdown();
