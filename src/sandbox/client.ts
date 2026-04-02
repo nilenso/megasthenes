@@ -139,6 +139,45 @@ export class SandboxClient {
 				},
 			);
 
+			if (statusRes.status === 404) {
+				this.logger.warn("sandbox:client", `clone job not found for ${slug}, re-triggering clone for ${url}`);
+				onProgress?.("Re-cloning repository…");
+
+				const retryRes = await fetch(`${this.config.baseUrl}/clone`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", ...this.authHeaders() },
+					body: JSON.stringify({ url, commitish }),
+					signal: AbortSignal.timeout(30_000),
+				});
+
+				const retryBody = (await retryRes.json()) as {
+					ok: boolean;
+					status?: string;
+					slug?: string;
+					sha?: string;
+					worktree?: string;
+					error?: string;
+				};
+
+				if (!retryBody.ok) {
+					throw new Error(`Sandbox clone failed on retry: ${retryBody.error}`);
+				}
+
+				// If the re-triggered clone is already cached/ready, return immediately
+				if (retryBody.status === "ready" && retryBody.slug && retryBody.sha && retryBody.worktree) {
+					const duration = Date.now() - t0;
+					this.logger.debug(
+						"sandbox:client",
+						`clone ready on retry (${duration}ms) slug=${retryBody.slug} sha=${retryBody.sha.slice(0, 12)}`,
+					);
+					onProgress?.("Repository ready");
+					return { slug: retryBody.slug, sha: retryBody.sha, worktree: retryBody.worktree };
+				}
+
+				// Otherwise continue polling for the re-triggered job
+				continue;
+			}
+
 			const statusBody = (await statusRes.json()) as {
 				ok: boolean;
 				status?: string;
