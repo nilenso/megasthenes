@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { executeTool } from "../src/tools";
+import {
+	buildFdCommand,
+	buildFindCommand,
+	buildGrepCommand,
+	buildRgCommand,
+	executeTool,
+	overrideToolAvailability,
+} from "../src/tools";
 
 let repoDir: string;
 
@@ -128,9 +135,10 @@ describe("executeRg", () => {
 		expect(result).toContain("Error (exit 1)");
 	});
 
-	test("no matches returns '(no matches)' with max_results", async () => {
+	test("no matches with max_results returns same error as without", async () => {
 		const result = await executeTool("rg", { pattern: "zzz_never_matches_zzz", max_results: 10 }, repoDir);
-		expect(result).toBe("(no matches)");
+		// Now consistent: rg exits 1 for no matches regardless of max_results
+		expect(result).toContain("Error (exit 1)");
 	});
 
 	test("invalid regex returns error", async () => {
@@ -249,10 +257,13 @@ describe("executeRead", () => {
 		expect(result).toContain("const greeting = 'hello world';");
 	});
 
-	test("prefixes each line with its line number", async () => {
+	test("prefixes each line with cat -n tab-delimited format", async () => {
 		const result = await executeTool("read", { path: "hello.ts" }, repoDir);
-		expect(result).toContain("1: const greeting");
-		expect(result).toContain("2: console.log");
+		// cat -n uses tab-delimited format: "     1\tline"
+		expect(result).toMatch(/\s+1\t.*const greeting/);
+		expect(result).toMatch(/\s+2\t.*console\.log/);
+		// Must NOT use the old colon-delimited format
+		expect(result).not.toMatch(/\s+1: const greeting/);
 	});
 
 	test("line numbers are right-aligned for multi-digit counts", async () => {
@@ -260,10 +271,9 @@ describe("executeRead", () => {
 		await writeFile(join(repoDir, "multiline.txt"), lines);
 
 		const result = await executeTool("read", { path: "multiline.txt" }, repoDir);
-		// Line 1 should be padded: " 1: line 1"
-		expect(result).toMatch(/ 1: line 1/);
-		// Line 12 should not be padded: "12: line 12"
-		expect(result).toMatch(/12: line 12/);
+		// cat -n pads line numbers with spaces and uses tab delimiter
+		expect(result).toMatch(/\s+1\tline 1/);
+		expect(result).toMatch(/\s+12\tline 12/);
 	});
 
 	test("reads file in a subdirectory", async () => {
@@ -274,7 +284,8 @@ describe("executeRead", () => {
 
 	test("returns error for nonexistent file", async () => {
 		const result = await executeTool("read", { path: "no_such_file.txt" }, repoDir);
-		expect(result).toStartWith("Error reading file:");
+		// cat returns non-zero exit code for missing files
+		expect(result).toStartWith("Error (exit");
 	});
 
 	test("returns error for path traversal with ../", async () => {
@@ -291,7 +302,8 @@ describe("executeRead", () => {
 		await writeFile(join(repoDir, "empty.txt"), "");
 		const result = await executeTool("read", { path: "empty.txt" }, repoDir);
 		expect(result).toContain("[File: empty.txt]");
-		expect(result).toContain("1: ");
+		// cat -n on empty file produces no lines, so runCommand returns "(no output)"
+		expect(result).toContain("(no output)");
 	});
 
 	test("handles file with special characters in content", async () => {
@@ -309,7 +321,8 @@ describe("executeRead", () => {
 
 		try {
 			const result = await executeTool("read", { path: "restricted.txt" }, repoDir);
-			expect(result).toStartWith("Error reading file:");
+			// cat returns non-zero exit code for permission denied
+			expect(result).toStartWith("Error (exit");
 			expect(result).not.toContain("secret content");
 		} finally {
 			// Restore permissions so afterEach cleanup can remove it
@@ -452,20 +465,20 @@ describe("validateProjectPath (via read/ls)", () => {
 		// Null byte truncates the path at the OS level — must not leak external content
 		expect(result).not.toContain("root:");
 		// Should either read hello.ts safely or return a read error
-		const safeRead = result.includes("[File:") || result.includes("Error reading file:");
+		const safeRead = result.includes("[File:") || result.includes("Error (exit");
 		expect(safeRead).toBe(true);
 	});
 
 	test("path with trailing slash does not escape repo", async () => {
 		const result = await executeTool("read", { path: "src/" }, repoDir);
-		// src/ is a directory — passes path validation but fails as a file read
-		expect(result).toStartWith("Error reading file:");
+		// src/ is a directory — passes path validation but cat fails on directories
+		expect(result).toStartWith("Error (exit");
 	});
 
 	test("dot path does not escape the repo", async () => {
 		const result = await executeTool("read", { path: "." }, repoDir);
-		// '.' is a directory — passes path validation but fails as a file read
-		expect(result).toStartWith("Error reading file:");
+		// '.' is a directory — passes path validation but cat fails on directories
+		expect(result).toStartWith("Error (exit");
 	});
 
 	test("deeply nested traversal is rejected by ls", async () => {
@@ -488,5 +501,207 @@ describe("validateProjectPath (via read/ls)", () => {
 		const result = await executeTool("ls", { path: "" }, repoDir);
 		expect(result).toContain("hello.ts");
 		expect(result).toContain("src");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildRgCommand / buildGrepCommand — command builders
+// ---------------------------------------------------------------------------
+describe("buildRgCommand", () => {
+	test("produces correct flags for all params", () => {
+		const cmd = buildRgCommand({ pattern: "foo", glob: "*.ts", max_count: 5, word: true });
+		expect(cmd).toEqual(["rg", "--line-number", "--max-count", "5", "foo", "--glob", "*.ts", "-w"]);
+	});
+
+	test("with only required pattern uses default max_count", () => {
+		const cmd = buildRgCommand({ pattern: "foo" });
+		expect(cmd).toEqual(["rg", "--line-number", "--max-count", "50", "foo"]);
+	});
+});
+
+describe("buildGrepCommand", () => {
+	test("produces equivalent flags", () => {
+		const cmd = buildGrepCommand({ pattern: "foo", glob: "*.ts", max_count: 5, word: true });
+		expect(cmd).toEqual(["grep", "-rn", "-I", "-m", "5", "--include=*.ts", "-w", "foo", "."]);
+	});
+
+	test("with only required pattern uses default max_count", () => {
+		const cmd = buildGrepCommand({ pattern: "foo" });
+		expect(cmd).toEqual(["grep", "-rn", "-I", "-m", "50", "foo", "."]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildFdCommand / buildFindCommand — command builders
+// ---------------------------------------------------------------------------
+describe("buildFdCommand", () => {
+	test("produces correct flags for all params", () => {
+		const cmd = buildFdCommand({
+			pattern: "foo",
+			type: "f",
+			extension: "ts",
+			max_depth: 2,
+			max_results: 10,
+			hidden: true,
+			glob: true,
+			exclude: "vendor",
+			full_path: true,
+		});
+		expect(cmd).toContain("--type");
+		expect(cmd).toContain("f");
+		expect(cmd).toContain("--extension");
+		expect(cmd).toContain("ts");
+		expect(cmd).toContain("--max-depth");
+		expect(cmd).toContain("2");
+		expect(cmd).toContain("--max-results");
+		expect(cmd).toContain("10");
+		expect(cmd).toContain("--hidden");
+		expect(cmd).toContain("--glob");
+		expect(cmd).toContain("--exclude");
+		expect(cmd).toContain("vendor");
+		expect(cmd).toContain("--full-path");
+		expect(cmd).toContain("foo");
+	});
+});
+
+describe("buildFindCommand", () => {
+	test("produces correct flags for type + extension", () => {
+		const cmd = buildFindCommand({ pattern: "foo", type: "f", extension: "ts" });
+		expect(cmd).toContain("-type");
+		expect(cmd).toContain("f");
+		expect(cmd).toContain("-name");
+		expect(cmd).toContain("*.ts");
+		// hidden files excluded by default
+		expect(cmd.join(" ")).toContain("-not -path */.*");
+	});
+
+	test("excludes hidden by default, includes with hidden: true", () => {
+		const withoutHidden = buildFindCommand({ pattern: "foo" });
+		expect(withoutHidden.join(" ")).toContain("-not -path */.*");
+
+		const withHidden = buildFindCommand({ pattern: "foo", hidden: true });
+		expect(withHidden.join(" ")).not.toContain("-not -path */.*");
+	});
+
+	test("with multiple comma-separated extensions uses -o grouping", () => {
+		const cmd = buildFindCommand({ pattern: ".", extension: "ts, json" });
+		const joined = cmd.join(" ");
+		expect(joined).toContain("(");
+		expect(joined).toContain("*.ts");
+		expect(joined).toContain("-o");
+		expect(joined).toContain("*.json");
+		expect(joined).toContain(")");
+	});
+
+	test("with exclude", () => {
+		const cmd = buildFindCommand({ pattern: ".", exclude: "vendor" });
+		const joined = cmd.join(" ");
+		expect(joined).toContain("-not -path */vendor/*");
+	});
+
+	test("with max_depth", () => {
+		const cmd = buildFindCommand({ pattern: ".", max_depth: 1 });
+		expect(cmd).toContain("-maxdepth");
+		expect(cmd).toContain("1");
+	});
+
+	test("with full_path uses -path instead of -name", () => {
+		const cmd = buildFindCommand({ pattern: "src/app", full_path: true });
+		expect(cmd).toContain("-path");
+		expect(cmd).toContain("*src/app*");
+		expect(cmd).not.toContain("-name");
+	});
+
+	test("with glob: true uses exact pattern in -name", () => {
+		const cmd = buildFindCommand({ pattern: "*.ts", glob: true });
+		const nameIdx = cmd.indexOf("-name");
+		expect(nameIdx).not.toBe(-1);
+		// glob mode: exact pattern, not wrapped in wildcards
+		expect(cmd[nameIdx + 1]).toBe("*.ts");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Fallback integration tests — forced via overrideToolAvailability
+// ---------------------------------------------------------------------------
+describe("rg fallback to grep", () => {
+	afterEach(() => {
+		// Restore real availability
+		overrideToolAvailability("rg", true);
+	});
+
+	test("returns matching lines with line numbers", async () => {
+		overrideToolAvailability("rg", false);
+		const result = await executeTool("rg", { pattern: "greeting" }, repoDir);
+		expect(result).toContain("hello.ts");
+		expect(result).toMatch(/\d+.*greeting/);
+	});
+
+	test("respects glob filter", async () => {
+		overrideToolAvailability("rg", false);
+		const result = await executeTool("rg", { pattern: "hello", glob: "*.ts" }, repoDir);
+		expect(result).toContain("hello.ts");
+		expect(result).not.toContain("hello.json");
+	});
+
+	test("respects word flag", async () => {
+		overrideToolAvailability("rg", false);
+		await writeFile(join(repoDir, "words.txt"), "app\napplication\nmy app here\n");
+		const result = await executeTool("rg", { pattern: "app", word: true, glob: "words.txt" }, repoDir);
+		expect(result).toContain("app");
+		expect(result).not.toContain("application");
+	});
+});
+
+describe("fd fallback to find", () => {
+	afterEach(() => {
+		overrideToolAvailability("fd", true);
+	});
+
+	test("returns matching file paths without ./ prefix", async () => {
+		overrideToolAvailability("fd", false);
+		const result = await executeTool("fd", { pattern: "hello" }, repoDir);
+		expect(result).toContain("hello.ts");
+		// Lines should not start with ./
+		for (const line of result.split("\n").filter((l) => l.trim())) {
+			expect(line).not.toMatch(/^\.\//);
+		}
+	});
+
+	test("respects type: f", async () => {
+		overrideToolAvailability("fd", false);
+		const result = await executeTool("fd", { pattern: ".", type: "f" }, repoDir);
+		expect(result).toContain("hello.ts");
+		// Should not contain directory names without extensions
+		const lines = result.split("\n").filter((l) => l.trim());
+		for (const line of lines) {
+			expect(line).toMatch(/\.\w+$/); // has a file extension
+		}
+	});
+
+	test("respects extension filter", async () => {
+		overrideToolAvailability("fd", false);
+		const result = await executeTool("fd", { pattern: ".", extension: "json" }, repoDir);
+		expect(result).toContain("hello.json");
+		expect(result).not.toContain("hello.ts");
+	});
+
+	test("excludes hidden files by default", async () => {
+		overrideToolAvailability("fd", false);
+		await writeFile(join(repoDir, ".hidden_config"), "secret=value\n");
+
+		const withoutHidden = await executeTool("fd", { pattern: "hidden_config" }, repoDir);
+		expect(withoutHidden).not.toContain(".hidden_config");
+
+		const withHidden = await executeTool("fd", { pattern: "hidden_config", hidden: true }, repoDir);
+		expect(withHidden).toContain(".hidden_config");
+	});
+
+	test("respects max_depth", async () => {
+		overrideToolAvailability("fd", false);
+		const result = await executeTool("fd", { pattern: ".", type: "f", max_depth: 1 }, repoDir);
+		expect(result).toContain("hello.ts");
+		expect(result).not.toContain("app.ts");
+		expect(result).not.toContain("file.txt");
 	});
 });
