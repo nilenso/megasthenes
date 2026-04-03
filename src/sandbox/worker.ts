@@ -411,18 +411,30 @@ interface ToolRequest {
 	args: Record<string, unknown>;
 }
 
+interface SandboxRunner {
+	runner: CommandRunner;
+	/** Exit code of the last command run through this runner. */
+	lastExitCode: number;
+}
+
 /**
  * Create a CommandRunner that wraps commands with bwrap + seccomp isolation.
  * Used for non-git tools (rg, fd, ls, read).
+ * Tracks the last exit code so the caller can distinguish success from failure.
  */
-function makeSandboxRunner(worktree: string): CommandRunner {
-	return async (cmd: string[], _cwd: string): Promise<CommandResult> => {
-		const result = await runToolIsolated(cmd, worktree);
-		if (result.exitCode !== 0) {
-			return { output: `Error (exit ${result.exitCode}):\n${result.stderr}`, exitCode: result.exitCode };
-		}
-		return { output: result.stdout || "(no output)", exitCode: 0 };
+function makeSandboxRunner(worktree: string): SandboxRunner {
+	const state: SandboxRunner = {
+		lastExitCode: 0,
+		runner: async (cmd: string[], _cwd: string): Promise<CommandResult> => {
+			const result = await runToolIsolated(cmd, worktree);
+			state.lastExitCode = result.exitCode;
+			if (result.exitCode !== 0) {
+				return { output: `Error (exit ${result.exitCode}):\n${result.stderr}`, exitCode: result.exitCode };
+			}
+			return { output: result.stdout || "(no output)", exitCode: 0 };
+		},
 	};
+	return state;
 }
 
 async function handleTool(body: ToolRequest): Promise<Response> {
@@ -449,8 +461,12 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 	}
 
 	// All non-git tools delegate to shared executeTool with bwrap-wrapping runner
-	const sandboxRunner = makeSandboxRunner(worktree);
-	const output = await executeTool(name, args, worktree, sandboxRunner);
+	const sandbox = makeSandboxRunner(worktree);
+	const output = await executeTool(name, args, worktree, sandbox.runner);
+
+	if (sandbox.lastExitCode !== 0) {
+		return Response.json({ ok: false, error: output }, { status: 500 });
+	}
 	return Response.json({ ok: true, output });
 }
 
