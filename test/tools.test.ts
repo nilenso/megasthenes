@@ -452,6 +452,22 @@ describe("executeGit", () => {
 		const result = await executeTool("git", { command: "log", args: ["--nonexistent-flag"] }, repoDir);
 		expect(result).toStartWith("Error (exit");
 	});
+
+	test("git rejects disallowed subcommands", async () => {
+		const disallowed = ["push", "fetch", "pull", "merge", "rebase", "commit", "checkout", "branch"];
+		for (const cmd of disallowed) {
+			const result = await executeTool("git", { command: cmd }, repoDir);
+			expect(result).toContain("not allowed");
+		}
+	});
+
+	test("git allows all commands in ALLOWED_GIT_COMMANDS", async () => {
+		// rev-parse HEAD is a safe read-only command that works in any repo
+		for (const cmd of ALLOWED_GIT_COMMANDS) {
+			const result = await executeTool("git", { command: cmd, args: ["HEAD"] }, repoDir);
+			expect(result).not.toContain("not allowed");
+		}
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -717,7 +733,7 @@ describe("CommandRunner injection", () => {
 		const calls: Array<{ cmd: string[]; cwd: string }> = [];
 		const runner: CommandRunner = async (cmd, cwd) => {
 			calls.push({ cmd, cwd });
-			return "(mocked)";
+			return { output: "(mocked)", exitCode: 0 };
 		};
 		return { runner, calls };
 	}

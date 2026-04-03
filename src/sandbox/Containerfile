@@ -40,15 +40,16 @@ RUN ARCH=$(uname -m) \
     && mkdir -p /etc/seccomp/$ARCH \
     && mv /tmp/net-block.bpf /etc/seccomp/$ARCH/net-block.bpf
 
+# Install runtime deps needed by tools.ts (typebox for schemas, pi-ai for Tool type)
+# Done before source copy for Docker layer caching
+COPY package.json bun.lock /app/
+RUN cd /app && bun install --production
+
 # Layout: /app/tools.ts, /app/sandbox/worker.ts, /app/sandbox/isolation/index.ts
 # so worker.ts can import ../tools and ./isolation
 COPY src/tools.ts /app/tools.ts
 COPY src/sandbox/worker.ts /app/sandbox/worker.ts
 COPY src/sandbox/isolation/index.ts /app/sandbox/isolation/index.ts
-
-# Install runtime deps needed by tools.ts (typebox for schemas, pi-ai for Tool type)
-COPY package.json bun.lock /app/
-RUN cd /app && bun install --production
 
 USER forge
 WORKDIR /home/forge

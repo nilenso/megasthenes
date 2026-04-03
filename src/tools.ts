@@ -4,11 +4,17 @@ import { Type } from "@sinclair/typebox";
 
 const RG_MAX_MATCHES_PER_FILE = 50;
 
+/** Result of running a subprocess command. */
+export interface CommandResult {
+	output: string;
+	exitCode: number;
+}
+
 /** Function signature for running a subprocess command. */
-export type CommandRunner = (cmd: string[], cwd: string) => Promise<string>;
+export type CommandRunner = (cmd: string[], cwd: string) => Promise<CommandResult>;
 
 /** Allowed read-only git subcommands, shared with the sandbox worker. */
-export const ALLOWED_GIT_COMMANDS: ReadonlySet<string> = new Set([
+const ALLOWED_GIT_COMMANDS_LIST = [
 	"log",
 	"show",
 	"blame",
@@ -18,7 +24,8 @@ export const ALLOWED_GIT_COMMANDS: ReadonlySet<string> = new Set([
 	"rev-parse",
 	"ls-tree",
 	"cat-file",
-]);
+] as const;
+export const ALLOWED_GIT_COMMANDS: ReadonlySet<string> = new Set(ALLOWED_GIT_COMMANDS_LIST);
 
 // ---------------------------------------------------------------------------
 // Tool availability detection
@@ -128,17 +135,7 @@ export const tools: Tool[] = [
 			"Run read-only git commands to explore repository history. Allowed subcommands: log, show, blame, diff, shortlog, describe, rev-parse, ls-tree, cat-file.",
 		parameters: Type.Object({
 			command: Type.Union(
-				[
-					Type.Literal("log"),
-					Type.Literal("show"),
-					Type.Literal("blame"),
-					Type.Literal("diff"),
-					Type.Literal("shortlog"),
-					Type.Literal("describe"),
-					Type.Literal("rev-parse"),
-					Type.Literal("ls-tree"),
-					Type.Literal("cat-file"),
-				],
+				ALLOWED_GIT_COMMANDS_LIST.map((cmd) => Type.Literal(cmd)),
 				{ description: "The git subcommand to run" },
 			),
 			args: Type.Optional(
@@ -151,14 +148,19 @@ export const tools: Tool[] = [
 	},
 ];
 
-async function runCommand(cmd: string[], cwd: string): Promise<string> {
+async function runCommand(cmd: string[], cwd: string): Promise<CommandResult> {
 	const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
 	const exitCode = await proc.exited;
 	if (exitCode !== 0) {
-		return `Error (exit ${exitCode}):\n${stderr}`;
+		return { output: `Error (exit ${exitCode}):\n${stderr}`, exitCode };
 	}
-	return stdout || "(no output)";
+	return { output: stdout || "(no output)", exitCode: 0 };
+}
+
+/** Format a CommandResult as a plain string (for callers that don't need structured results). */
+function resultToString(result: CommandResult): string {
+	return result.output;
 }
 
 function validateProjectPath(repoPath: string, userPath: string): string | null {
@@ -209,12 +211,12 @@ async function executeRg(args: Record<string, unknown>, repoPath: string, runner
 
 	const result = await runner(cmd, repoPath);
 
-	if (maxResults && !result.startsWith("Error")) {
-		const lines = result.split("\n").filter((l) => l.trim().length > 0);
+	if (maxResults && result.exitCode === 0) {
+		const lines = result.output.split("\n").filter((l) => l.trim().length > 0);
 		return lines.slice(0, maxResults).join("\n");
 	}
 
-	return result;
+	return resultToString(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -323,10 +325,10 @@ async function executeFd(args: Record<string, unknown>, repoPath: string, runner
 
 	const result = await runner(cmd, repoPath);
 
-	if (result.startsWith("Error")) return result;
+	if (result.exitCode !== 0) return resultToString(result);
 
 	if (!fdAvailable) {
-		const stripped = stripFindPrefix(result);
+		const stripped = stripFindPrefix(result.output);
 		if (maxResults) {
 			const lines = stripped.split("\n").filter((l) => l.trim().length > 0);
 			return lines.slice(0, maxResults).join("\n") || "(no output)";
@@ -334,7 +336,7 @@ async function executeFd(args: Record<string, unknown>, repoPath: string, runner
 		return stripped || "(no output)";
 	}
 
-	return result;
+	return resultToString(result);
 }
 
 async function executeLs(args: Record<string, unknown>, repoPath: string, runner: CommandRunner): Promise<string> {
@@ -344,7 +346,7 @@ async function executeLs(args: Record<string, unknown>, repoPath: string, runner
 		return `Error: invalid project path: ${path}`;
 	}
 
-	return runner(["ls", "-la", fullPath], repoPath);
+	return resultToString(await runner(["ls", "-la", fullPath], repoPath));
 }
 
 async function executeRead(args: Record<string, unknown>, repoPath: string, runner: CommandRunner): Promise<string> {
@@ -354,19 +356,22 @@ async function executeRead(args: Record<string, unknown>, repoPath: string, runn
 		return `Error: invalid project path: ${filePath}`;
 	}
 
-	const content = await runner(["cat", "-n", fullPath], repoPath);
-	if (content.startsWith("Error")) {
-		return content;
+	const result = await runner(["cat", "-n", fullPath], repoPath);
+	if (result.exitCode !== 0) {
+		return resultToString(result);
 	}
-	return `[File: ${filePath}]\n\n${content}`;
+	return `[File: ${filePath}]\n\n${result.output}`;
 }
 
 async function executeGit(args: Record<string, unknown>, repoPath: string, runner: CommandRunner): Promise<string> {
 	const command = args.command as string;
+	if (!ALLOWED_GIT_COMMANDS.has(command)) {
+		return `Error: git subcommand not allowed: ${command}. Allowed: ${[...ALLOWED_GIT_COMMANDS].join(", ")}`;
+	}
 	const gitArgs = (args.args as string[]) || [];
 
 	const cmd = ["git", command, ...gitArgs];
-	return runner(cmd, repoPath);
+	return resultToString(await runner(cmd, repoPath));
 }
 
 export async function executeTool(

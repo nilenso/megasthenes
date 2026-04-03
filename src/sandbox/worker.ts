@@ -13,7 +13,11 @@
 
 import { closeSync, openSync } from "node:fs";
 
-import { ALLOWED_GIT_COMMANDS, type CommandRunner, executeTool } from "../tools";
+import { ALLOWED_GIT_COMMANDS, type CommandResult, type CommandRunner, executeTool, tools } from "../tools";
+
+/** Tool names from the shared tools definition, excluding git (handled separately). */
+const TOOL_NAMES = new Set(tools.map((t) => t.name).filter((n) => n !== "git"));
+
 import { isolatedGitCommand, isolatedGitToolCommand, isolatedToolCommand } from "./isolation";
 
 /** Path to seccomp BPF filter that blocks network sockets (arch-specific) */
@@ -412,12 +416,12 @@ interface ToolRequest {
  * Used for non-git tools (rg, fd, ls, read).
  */
 function makeSandboxRunner(worktree: string): CommandRunner {
-	return async (cmd: string[], _cwd: string): Promise<string> => {
+	return async (cmd: string[], _cwd: string): Promise<CommandResult> => {
 		const result = await runToolIsolated(cmd, worktree);
 		if (result.exitCode !== 0) {
-			return `Error (exit ${result.exitCode}):\n${result.stderr}`;
+			return { output: `Error (exit ${result.exitCode}):\n${result.stderr}`, exitCode: result.exitCode };
 		}
-		return result.stdout || "(no output)";
+		return { output: result.stdout || "(no output)", exitCode: 0 };
 	};
 }
 
@@ -439,16 +443,14 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 		return handleGitTool(slug, worktree, args);
 	}
 
+	// Reject unknown tools before executing
+	if (!TOOL_NAMES.has(name)) {
+		return Response.json({ ok: false, error: `Unknown tool: ${name}` }, { status: 400 });
+	}
+
 	// All non-git tools delegate to shared executeTool with bwrap-wrapping runner
 	const sandboxRunner = makeSandboxRunner(worktree);
 	const output = await executeTool(name, args, worktree, sandboxRunner);
-
-	if (output.startsWith("Unknown tool:")) {
-		return Response.json({ ok: false, error: output }, { status: 400 });
-	}
-	if (output.startsWith("Error")) {
-		return Response.json({ ok: false, error: output }, { status: 500 });
-	}
 	return Response.json({ ok: true, output });
 }
 
