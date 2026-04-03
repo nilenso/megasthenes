@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.18] - 2026-04-02
+
+### Added
+* Tool fallback commands: `rg`→`grep` and `fd`→`find` fallback with `cat -n` for `read`
+* Line numbers and file header in sandbox `read` tool output
+* Tracing support in eval script
+* Security vulnerability test suite for sandbox and local mode
+* Documentation site with Starlight (configuration guide, sandbox diagram)
+
+### Changed
+* Switch sandbox tooling from Podman to Docker
+* Improved reasoning prompts
+* Refactored thinking config
+
+### Fixed
+* Session reopen hanging: handle 404 in clone status polling
+* Path traversal blocked in local tools
+* Detailed span error recording across failure paths
+* Tool error tracing and crash handling normalized
+* DNS and seccomp fixes for gVisor compatibility
+
 ## [0.0.11] - 2026-02-20
 
 ### Added
