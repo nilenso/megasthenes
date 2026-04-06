@@ -1,32 +1,32 @@
 ---
 title: Running Evaluations
-description: Download the eval dataset and run ask-forge's evaluation harness.
+description: Download the eval dataset and run megasthenes's evaluation harness.
 sidebar:
   order: 2
 ---
 
-The eval runner uses the published `nilenso/ask-forge-eval-dataset` dataset from Hugging Face.
+The eval runner uses the published `nilenso/megasthenes-eval-dataset` dataset from Hugging Face.
 
 ### Download the dataset
 
 ```bash
 pip install "huggingface-hub[cli]"
-huggingface-cli download nilenso/ask-forge-eval-dataset --repo-type dataset --local-dir ./eval-data
+huggingface-cli download nilenso/megasthenes-eval-dataset --repo-type dataset --local-dir ./eval-data
 ```
 
 ### Run the eval
 
 ```bash
-bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv
+bun run scripts/eval/run-eval.ts ./eval-data/megasthenes-eval-dataset.csv
 
 # With effort-based thinking (any provider)
-bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --effort high
+bun run scripts/eval/run-eval.ts ./eval-data/megasthenes-eval-dataset.csv --effort high
 
 # With adaptive thinking (Anthropic 4.6 only)
-bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --thinking adaptive
+bun run scripts/eval/run-eval.ts ./eval-data/megasthenes-eval-dataset.csv --thinking adaptive
 
 # Adaptive with explicit effort guidance
-bun run scripts/eval/run-eval.ts ./eval-data/ask-forge-eval-dataset.csv --thinking adaptive --effort medium
+bun run scripts/eval/run-eval.ts ./eval-data/megasthenes-eval-dataset.csv --thinking adaptive --effort medium
 ```
 
 Results are written to `scripts/eval/reports/`.

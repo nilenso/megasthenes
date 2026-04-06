@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AskForgeClient } from "../src/index";
+import { Client } from "../src/index";
 import { nullLogger } from "../src/logger";
 
 // =============================================================================
@@ -75,26 +75,26 @@ async function createTestRepo(baseDir: string): Promise<TestRepo> {
 }
 
 function createTestClient() {
-	return new AskForgeClient({}, nullLogger);
+	return new Client({}, nullLogger);
 }
 
 // =============================================================================
 // Test Suite
 // =============================================================================
 
-describe("AskForgeClient", () => {
+describe("Client", () => {
 	let testDir: string;
 	let testRepo: TestRepo;
 	const cacheCleanupPaths: string[] = [];
 
 	beforeAll(async () => {
-		testDir = join(tmpdir(), `ask-forge-client-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		testDir = join(tmpdir(), `megasthenes-client-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		await mkdir(testDir, { recursive: true });
 		testRepo = await createTestRepo(testDir);
 
 		const home = process.env.HOME || "";
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "tmp"));
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "var"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "tmp"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "var"));
 	});
 
 	afterAll(async () => {

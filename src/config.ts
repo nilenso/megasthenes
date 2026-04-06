@@ -1,5 +1,5 @@
 /**
- * Configuration for ask-forge agent.
+ * Configuration for megasthenes agent.
  *
  * This file contains all configurable settings for the TypeScript agent.
  */

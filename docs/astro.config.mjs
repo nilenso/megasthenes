@@ -4,16 +4,16 @@ import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
 export default defineConfig({
 	site: "https://nilenso.github.io",
-	base: "/ask-forge",
+	base: "/megasthenes",
 	integrations: [
 		starlight({
-			title: "ask-forge",
+			title: "megasthenes",
 			customCss: ["./src/styles/custom.css"],
 			social: [
 				{
 					icon: "github",
 					label: "GitHub",
-					href: "https://github.com/nilenso/ask-forge",
+					href: "https://github.com/nilenso/megasthenes",
 				},
 			],
 			plugins: [

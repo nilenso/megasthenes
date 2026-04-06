@@ -116,7 +116,7 @@ describe("forge", () => {
 
 	beforeAll(async () => {
 		// Create test directory and repository once for all tests
-		testDir = join(tmpdir(), `ask-forge-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		testDir = join(tmpdir(), `megasthenes-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		await mkdir(testDir, { recursive: true });
 		const testRepo = await createTestRepo(testDir);
 
@@ -128,10 +128,10 @@ describe("forge", () => {
 		// Track cache paths to clean up (based on URL parsing behavior)
 		// file:///tmp/... or file:///var/... parses to username="tmp" or "var"
 		const home = process.env.HOME || "";
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "tmp"));
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "var"));
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "testuser"));
-		cacheCleanupPaths.push(join(home, ".ask-forge", "repos", "gitlab-examples"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "tmp"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "var"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "testuser"));
+		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "gitlab-examples"));
 	});
 
 	afterAll(async () => {
@@ -158,7 +158,7 @@ describe("forge", () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 
 			expect(repo.url).toBe(repoUrl);
-			expect(repo.localPath).toContain(".ask-forge");
+			expect(repo.localPath).toContain(".megasthenes");
 			expect(repo.commitish).toBe(commit2);
 
 			const readme = await readFile(join(repo.localPath, "README.md"), "utf-8");
@@ -390,7 +390,7 @@ describe("forge", () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 
 			// repoUrl is file:// — parseRepoPath extracts the first two path segments
-			// The cache structure is ~/.ask-forge/repos/{username}/{reponame}/repo
+			// The cache structure is ~/.megasthenes/repos/{username}/{reponame}/repo
 			const url = new URL(repoUrl);
 			const parts = url.pathname
 				.replace(/^\//, "")
@@ -416,7 +416,7 @@ describe("forge", () => {
 			expect(parsedReponame).not.toMatch(/\.git$/);
 
 			const home = homedir();
-			const expectedCachePath = resolve(home, ".ask-forge", "repos", parts[0], parsedReponame, "repo");
+			const expectedCachePath = resolve(home, ".megasthenes", "repos", parts[0], parsedReponame, "repo");
 			expect(repo.cachePath).toBe(expectedCachePath);
 		});
 	});

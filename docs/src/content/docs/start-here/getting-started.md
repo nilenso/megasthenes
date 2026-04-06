@@ -1,11 +1,11 @@
 ---
 title: Getting Started
-description: Install and use ask-forge to connect an LLM to a git repository.
+description: Install and use megasthenes to connect an LLM to a git repository.
 sidebar:
   order: 1
 ---
 
-ask-forge is a TypeScript library that lets you programmatically ask questions to any GitHub or GitLab repository. It connects an LLM to a cloned repo with tools for code search, file reading, and git operations, then returns structured answers with source references.
+megasthenes is a TypeScript library that lets you programmatically ask questions to any GitHub or GitLab repository. It connects an LLM to a cloned repo with tools for code search, file reading, and git operations, then returns structured answers with source references.
 
 ## Features
 
@@ -26,18 +26,18 @@ ask-forge is a TypeScript library that lets you programmatically ask questions t
 
 ```bash
 # npm (via JSR)
-npx jsr add @nilenso/ask-forge
+npx jsr add @nilenso/megasthenes
 
 # Bun
-bunx jsr add @nilenso/ask-forge
+bunx jsr add @nilenso/megasthenes
 ```
 
 ## Quick Start
 
 ```ts
-import { AskForgeClient } from "@nilenso/ask-forge";
+import { Client } from "@nilenso/megasthenes";
 
-const client = new AskForgeClient({
+const client = new Client({
   provider: "openrouter",
   model: "anthropic/claude-sonnet-4-20250514",
 });

@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry instrumentation for ask-forge.
+ * OpenTelemetry instrumentation for megasthenes.
  *
  * This module emits OTel spans following the GenAI semantic conventions.
  * The library only depends on @opentelemetry/api — if the consumer hasn't
@@ -23,10 +23,10 @@
  */
 import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
 
-const tracer = trace.getTracer("ask-forge");
+const tracer = trace.getTracer("megasthenes");
 
 // =============================================================================
-// Attribute keys (GenAI semantic conventions + ask-forge extensions)
+// Attribute keys (GenAI semantic conventions + megasthenes extensions)
 // =============================================================================
 
 const ATTR = {
@@ -43,21 +43,21 @@ const ATTR = {
 
 	STOP_REASON: "gen_ai.response.finish_reason",
 
-	// ask-forge extensions
-	SESSION_ID: "ask_forge.session.id",
-	REPO_URL: "ask_forge.repo.url",
-	REPO_COMMITISH: "ask_forge.repo.commitish",
-	ITERATION: "ask_forge.iteration",
-	TOTAL_ITERATIONS: "ask_forge.total_iterations",
-	TOTAL_TOOL_CALLS: "ask_forge.total_tool_calls",
-	COMPACTION_WAS_COMPACTED: "ask_forge.compaction.was_compacted",
-	COMPACTION_TOKENS_BEFORE: "ask_forge.compaction.tokens_before",
-	COMPACTION_TOKENS_AFTER: "ask_forge.compaction.tokens_after",
-	RESPONSE_TOTAL_LINKS: "ask_forge.response.total_links",
-	RESPONSE_INVALID_LINKS: "ask_forge.response.invalid_links",
+	// megasthenes extensions
+	SESSION_ID: "megasthenes.session.id",
+	REPO_URL: "megasthenes.repo.url",
+	REPO_COMMITISH: "megasthenes.repo.commitish",
+	ITERATION: "megasthenes.iteration",
+	TOTAL_ITERATIONS: "megasthenes.total_iterations",
+	TOTAL_TOOL_CALLS: "megasthenes.total_tool_calls",
+	COMPACTION_WAS_COMPACTED: "megasthenes.compaction.was_compacted",
+	COMPACTION_TOKENS_BEFORE: "megasthenes.compaction.tokens_before",
+	COMPACTION_TOKENS_AFTER: "megasthenes.compaction.tokens_after",
+	RESPONSE_TOTAL_LINKS: "megasthenes.response.total_links",
+	RESPONSE_INVALID_LINKS: "megasthenes.response.invalid_links",
 	ERROR_TYPE: "error.type",
-	ERROR_NAME: "ask_forge.error.name",
-	ERROR_MESSAGE: "ask_forge.error.message",
+	ERROR_NAME: "megasthenes.error.name",
+	ERROR_MESSAGE: "megasthenes.error.message",
 } as const;
 
 // OTel event names (GenAI semantic conventions)

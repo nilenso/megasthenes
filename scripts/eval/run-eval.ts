@@ -18,7 +18,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { completeSimple, getModel, type ThinkingLevel } from "@mariozechner/pi-ai";
 import { MAX_TOOL_ITERATIONS, MODEL_NAME, MODEL_PROVIDER, type ThinkingConfig } from "../../src/config";
-import { AskForgeClient, buildDefaultSystemPrompt, nullLogger } from "../../src/index";
+import { buildDefaultSystemPrompt, Client, nullLogger } from "../../src/index";
 import { JUDGE_SYSTEM_PROMPT } from "../../src/prompt";
 import { type EvalRow, loadRowsFromCsv, writeCsvString } from "./csv";
 
@@ -114,7 +114,7 @@ async function runEval(inputPath: string, thinking: ThinkingConfig | undefined):
 	}
 	console.log();
 
-	const client = new AskForgeClient(
+	const client = new Client(
 		{
 			provider: MODEL_PROVIDER,
 			model: MODEL_NAME,

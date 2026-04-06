@@ -158,8 +158,8 @@ export async function cleanupWorktree(repo: Repo): Promise<boolean> {
 /**
  * Connect to a git repository, cloning if necessary and creating a worktree.
  *
- * Repositories are cached as bare clones in ~/.ask-forge/repos/{user}/{repo}/repo.
- * Each unique commitish gets its own worktree in ~/.ask-forge/repos/{user}/{repo}/trees/{sha}.
+ * Repositories are cached as bare clones in ~/.megasthenes/repos/{user}/{repo}/repo.
+ * Each unique commitish gets its own worktree in ~/.megasthenes/repos/{user}/{repo}/trees/{sha}.
  *
  * @param repoUrl - The repository URL (https://github.com/user/repo)
  * @param options - Connection options (token, forge, commitish)
@@ -174,7 +174,7 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {})
 
 	const forge = forges[forgeName];
 	const { username, reponame } = parseRepoPath(repoUrl);
-	const basePath = join(homedir(), ".ask-forge", "repos", username, reponame);
+	const basePath = join(homedir(), ".megasthenes", "repos", username, reponame);
 	const cachePath = join(basePath, "repo");
 	const commitish = options.commitish ?? "HEAD";
 
