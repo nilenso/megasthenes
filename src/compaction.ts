@@ -1,5 +1,5 @@
 /**
- * Context compaction for ask-forge.
+ * Context compaction for megasthenes.
  * Inspired by pi coding agent's compaction approach.
  *
  * When context gets too large, we:

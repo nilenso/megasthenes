@@ -1,17 +1,17 @@
 ---
 title: Local Setup
-description: Clone ask-forge, install dependencies, and run the project locally.
+description: Clone megasthenes, install dependencies, and run the project locally.
 sidebar:
   order: 1
 ---
 
-Use this flow if you want to work on ask-forge itself rather than consume it as a library.
+Use this flow if you want to work on megasthenes itself rather than consume it as a library.
 
 ### Clone and install
 
 ```bash
-git clone https://github.com/nilenso/ask-forge.git
-cd ask-forge
+git clone https://github.com/nilenso/megasthenes.git
+cd megasthenes
 bun install
 ```
 

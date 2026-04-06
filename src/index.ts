@@ -64,7 +64,7 @@ interface ForgeConfigBase {
 }
 
 /**
- * Configuration for the ask-forge library.
+ * Configuration for the megasthenes library.
  *
  * Provider and model must either both be specified or both omitted.
  * If omitted, defaults to openrouter with claude-sonnet-4.6.
@@ -92,7 +92,7 @@ export type ForgeConfig = ForgeConfigBase &
  *
  * @example
  * ```ts
- * const client = new AskForgeClient({
+ * const client = new Client({
  *   provider: "openrouter",
  *   model: "anthropic/claude-sonnet-4.6",
  *   systemPrompt: "You are a code analysis assistant.",
@@ -115,7 +115,7 @@ interface ResolvedConfig {
 	thinking?: ThinkingConfig;
 }
 
-export class AskForgeClient {
+export class Client {
 	/** The configuration used by this client (with defaults applied) */
 	readonly config: ResolvedConfig;
 
@@ -123,7 +123,7 @@ export class AskForgeClient {
 	readonly #sandboxClient?: SandboxClient;
 
 	/**
-	 * Create a new AskForgeClient.
+	 * Create a new Client.
 	 *
 	 * @param config - Library configuration (defaults to openrouter with claude-sonnet-4.6)
 	 * @param logger - Logger instance (defaults to consoleLogger)

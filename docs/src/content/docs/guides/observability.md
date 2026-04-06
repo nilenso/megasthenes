@@ -1,11 +1,11 @@
 ---
 title: Observability
-description: Monitor ask-forge sessions with OpenTelemetry tracing.
+description: Monitor megasthenes sessions with OpenTelemetry tracing.
 sidebar:
   order: 4
 ---
 
-ask-forge instruments all LLM interactions with [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
+megasthenes instruments all LLM interactions with [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
 
 ### Setup
 
@@ -28,7 +28,7 @@ Once registered, all `session.ask()` calls automatically emit spans.
 ### Trace Structure
 
 ```
-ask_forge.session.ask
+megasthenes.session.ask
 ├── gen_ai.chat (per LLM call)
 │   └── gen_ai.tool_call (per tool invocation)
 ├── gen_ai.chat
@@ -46,6 +46,6 @@ ask_forge.session.ask
 | `gen_ai.response.finish_reasons` | Why the model stopped |
 | `gen_ai.usage.input_tokens` | Prompt token count |
 | `gen_ai.usage.output_tokens` | Completion token count |
-| `ask_forge.iteration.count` | Number of tool-use iterations |
-| `ask_forge.tool_call.count` | Total tool calls in the session |
-| `ask_forge.repo.url` | Repository URL |
+| `megasthenes.iteration.count` | Number of tool-use iterations |
+| `megasthenes.tool_call.count` | Total tool calls in the session |
+| `megasthenes.repo.url` | Repository URL |
