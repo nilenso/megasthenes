@@ -12,7 +12,7 @@
  */
 
 import { closeSync, openSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { buildToolCommand } from "../tool-commands";
 import { isolatedGitCommand, isolatedGitToolCommand, isolatedToolCommand } from "./isolation";
 
 /** Path to seccomp BPF filter that blocks network sockets (arch-specific) */
@@ -138,19 +138,6 @@ function slugify(url: string): string {
 	} catch {
 		return url.replace(/[^a-zA-Z0-9._-]/g, "_");
 	}
-}
-
-/** Validate path stays within worktree root. */
-function validatePath(worktree: string, userPath: string): string | null {
-	const worktreeRoot = resolve(worktree);
-	const fullPath = resolve(worktreeRoot, userPath);
-	const relPath = relative(worktreeRoot, fullPath);
-
-	if (relPath.startsWith("..") || isAbsolute(relPath)) {
-		return null;
-	}
-
-	return fullPath;
 }
 
 /** Run a git command with filesystem + PID isolation. */
@@ -432,113 +419,30 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 		return Response.json({ ok: false, error: `Worktree not found: ${worktree}` }, { status: 404 });
 	}
 
-	switch (name) {
-		case "rg": {
-			const pattern = args.pattern as string;
-			const glob = args.glob as string | undefined;
-			const cmd = ["rg", "--line-number", pattern];
-			if (glob) cmd.push("--glob", glob);
-			const result = await runToolIsolated(cmd, worktree);
-			if (result.exitCode !== 0) {
-				return Response.json(
-					{ ok: false, error: `rg failed (exit ${result.exitCode}):\n${result.stderr}` },
-					{ status: 500 },
-				);
-			}
-			return Response.json({ ok: true, output: result.stdout || "(no output)" });
-		}
-		case "find": {
-			const pattern = args.pattern as string;
-			const type = args.type as "f" | "d" | undefined;
-			const cmd = ["find", ".", "-name", `*${pattern}*`];
-			if (type === "f") cmd.push("-type", "f");
-			else if (type === "d") cmd.push("-type", "d");
-			const result = await runToolIsolated(cmd, worktree);
-			if (result.exitCode !== 0) {
-				return Response.json(
-					{ ok: false, error: `find failed (exit ${result.exitCode}):\n${result.stderr}` },
-					{ status: 500 },
-				);
-			}
-			return Response.json({ ok: true, output: result.stdout || "(no output)" });
-		}
-		case "ls": {
-			const path = (args.path as string) || ".";
-			const fullPath = validatePath(worktree, path);
-			if (!fullPath) {
-				return Response.json({ ok: false, error: `invalid project path: ${path}` }, { status: 400 });
-			}
-			const result = await runToolIsolated(["ls", "-la", fullPath], worktree);
-			if (result.exitCode !== 0) {
-				return Response.json(
-					{ ok: false, error: `ls failed (exit ${result.exitCode}):\n${result.stderr}` },
-					{ status: 500 },
-				);
-			}
-			return Response.json({ ok: true, output: result.stdout || "(no output)" });
-		}
-		case "read": {
-			const path = args.path as string;
-			const fullPath = validatePath(worktree, path);
-			if (!fullPath) {
-				return Response.json({ ok: false, error: `invalid project path: ${path}` }, { status: 400 });
-			}
-			const result = await runToolIsolated(["cat", "-n", fullPath], worktree);
-			if (result.exitCode !== 0) {
-				return Response.json(
-					{ ok: false, error: `read failed (exit ${result.exitCode}):\n${result.stderr}` },
-					{ status: 500 },
-				);
-			}
-			return Response.json({ ok: true, output: result.stdout || "(empty file)" });
-		}
-		case "git": {
-			// Read-only git commands (log, show, blame, diff, etc.)
-			const subcommand = args.command as string;
-			const gitArgs = (args.args as string[]) || [];
-
-			// Allowlist of read-only git subcommands
-			const allowedCommands = [
-				"log",
-				"show",
-				"blame",
-				"diff",
-				"shortlog",
-				"describe",
-				"rev-parse",
-				"ls-tree",
-				"cat-file",
-			];
-			if (!allowedCommands.includes(subcommand)) {
-				return Response.json(
-					{ ok: false, error: `git subcommand not allowed: ${subcommand}. Allowed: ${allowedCommands.join(", ")}` },
-					{ status: 400 },
-				);
-			}
-
-			// Validate any path arguments don't escape worktree
-			for (const arg of gitArgs) {
-				if (arg.startsWith("-")) continue; // Skip flags
-				if (arg.includes("..")) {
-					return Response.json({ ok: false, error: "path traversal not allowed in args" }, { status: 400 });
-				}
-			}
-
-			// Git worktrees need access to bare repo for .git references
-			const bareRepo = `${repoDir(slug)}/bare`;
-			const cmd = isolatedGitToolCommand(["git", subcommand, ...gitArgs], worktree, bareRepo, REPO_BASE);
-			const result = await run(cmd, worktree, undefined, TOOL_TIMEOUT_MS, SECCOMP_FILTER_PATH);
-			if (result.exitCode !== 0 && result.stderr) {
-				return Response.json(
-					{ ok: false, error: `git ${subcommand} failed (exit ${result.exitCode}):\n${result.stderr}` },
-					{ status: 500 },
-				);
-			}
-			return Response.json({ ok: true, output: result.stdout || "(no output)" });
-		}
-		default:
-			return Response.json({ ok: false, error: `Unknown tool: ${name}` }, { status: 400 });
+	const toolCmd = buildToolCommand(name, args, worktree);
+	if (!toolCmd.ok) {
+		return Response.json({ ok: false, error: toolCmd.error }, { status: 400 });
 	}
+
+	// Git needs access to the bare repo for worktree .git references
+	let result: { stdout: string; stderr: string; exitCode: number };
+	if (name === "git") {
+		const bareRepo = `${repoDir(slug)}/bare`;
+		const cmd = isolatedGitToolCommand(toolCmd.cmd, worktree, bareRepo, REPO_BASE);
+		result = await run(cmd, worktree, undefined, TOOL_TIMEOUT_MS, SECCOMP_FILTER_PATH);
+	} else {
+		result = await runToolIsolated(toolCmd.cmd, worktree);
+	}
+
+	if (result.exitCode !== 0) {
+		return Response.json(
+			{ ok: false, error: `${name} failed (exit ${result.exitCode}):\n${result.stderr}` },
+			{ status: 500 },
+		);
+	}
+
+	const output = result.stdout || "(no output)";
+	return Response.json({ ok: true, output: toolCmd.postProcess ? toolCmd.postProcess(output) : output });
 }
 
 // =============================================================================

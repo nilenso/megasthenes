@@ -2,14 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	buildFdCommand,
-	buildFindCommand,
-	buildGrepCommand,
-	buildRgCommand,
-	executeTool,
-	overrideToolAvailability,
-} from "../src/tools";
+import { buildFdCommand, buildRgCommand } from "../src/tool-commands";
+import { executeTool, overrideToolAvailability, validateRequiredTools } from "../src/tools";
 
 let repoDir: string;
 
@@ -519,20 +513,8 @@ describe("buildRgCommand", () => {
 	});
 });
 
-describe("buildGrepCommand", () => {
-	test("produces equivalent flags", () => {
-		const cmd = buildGrepCommand({ pattern: "foo", glob: "*.ts", max_count: 5, word: true });
-		expect(cmd).toEqual(["grep", "-rn", "-I", "-m", "5", "--include=*.ts", "-w", "foo", "."]);
-	});
-
-	test("with only required pattern uses default max_count", () => {
-		const cmd = buildGrepCommand({ pattern: "foo" });
-		expect(cmd).toEqual(["grep", "-rn", "-I", "-m", "50", "foo", "."]);
-	});
-});
-
 // ---------------------------------------------------------------------------
-// buildFdCommand / buildFindCommand — command builders
+// buildFdCommand — command builder
 // ---------------------------------------------------------------------------
 describe("buildFdCommand", () => {
 	test("produces correct flags for all params", () => {
@@ -564,144 +546,41 @@ describe("buildFdCommand", () => {
 	});
 });
 
-describe("buildFindCommand", () => {
-	test("produces correct flags for type + extension", () => {
-		const cmd = buildFindCommand({ pattern: "foo", type: "f", extension: "ts" });
-		expect(cmd).toContain("-type");
-		expect(cmd).toContain("f");
-		expect(cmd).toContain("-name");
-		expect(cmd).toContain("*.ts");
-		// hidden files excluded by default
-		expect(cmd.join(" ")).toContain("-not -path */.*");
-	});
-
-	test("excludes hidden by default, includes with hidden: true", () => {
-		const withoutHidden = buildFindCommand({ pattern: "foo" });
-		expect(withoutHidden.join(" ")).toContain("-not -path */.*");
-
-		const withHidden = buildFindCommand({ pattern: "foo", hidden: true });
-		expect(withHidden.join(" ")).not.toContain("-not -path */.*");
-	});
-
-	test("with multiple comma-separated extensions uses -o grouping", () => {
-		const cmd = buildFindCommand({ pattern: ".", extension: "ts, json" });
-		const joined = cmd.join(" ");
-		expect(joined).toContain("(");
-		expect(joined).toContain("*.ts");
-		expect(joined).toContain("-o");
-		expect(joined).toContain("*.json");
-		expect(joined).toContain(")");
-	});
-
-	test("with exclude", () => {
-		const cmd = buildFindCommand({ pattern: ".", exclude: "vendor" });
-		const joined = cmd.join(" ");
-		expect(joined).toContain("-not -path */vendor/*");
-	});
-
-	test("with max_depth", () => {
-		const cmd = buildFindCommand({ pattern: ".", max_depth: 1 });
-		expect(cmd).toContain("-maxdepth");
-		expect(cmd).toContain("1");
-	});
-
-	test("with full_path uses -path instead of -name", () => {
-		const cmd = buildFindCommand({ pattern: "src/app", full_path: true });
-		expect(cmd).toContain("-path");
-		expect(cmd).toContain("*src/app*");
-		expect(cmd).not.toContain("-name");
-	});
-
-	test("with glob: true uses exact pattern in -name", () => {
-		const cmd = buildFindCommand({ pattern: "*.ts", glob: true });
-		const nameIdx = cmd.indexOf("-name");
-		expect(nameIdx).not.toBe(-1);
-		// glob mode: exact pattern, not wrapped in wildcards
-		expect(cmd[nameIdx + 1]).toBe("*.ts");
-	});
-});
-
 // ---------------------------------------------------------------------------
-// Fallback integration tests — forced via overrideToolAvailability
+// validateRequiredTools
 // ---------------------------------------------------------------------------
-describe("rg fallback to grep", () => {
+describe("validateRequiredTools", () => {
 	afterEach(() => {
 		// Restore real availability
 		overrideToolAvailability("rg", true);
-	});
-
-	test("returns matching lines with line numbers", async () => {
-		overrideToolAvailability("rg", false);
-		const result = await executeTool("rg", { pattern: "greeting" }, repoDir);
-		expect(result).toContain("hello.ts");
-		expect(result).toMatch(/\d+.*greeting/);
-	});
-
-	test("respects glob filter", async () => {
-		overrideToolAvailability("rg", false);
-		const result = await executeTool("rg", { pattern: "hello", glob: "*.ts" }, repoDir);
-		expect(result).toContain("hello.ts");
-		expect(result).not.toContain("hello.json");
-	});
-
-	test("respects word flag", async () => {
-		overrideToolAvailability("rg", false);
-		await writeFile(join(repoDir, "words.txt"), "app\napplication\nmy app here\n");
-		const result = await executeTool("rg", { pattern: "app", word: true, glob: "words.txt" }, repoDir);
-		expect(result).toContain("app");
-		expect(result).not.toContain("application");
-	});
-});
-
-describe("fd fallback to find", () => {
-	afterEach(() => {
 		overrideToolAvailability("fd", true);
 	});
 
-	test("returns matching file paths without ./ prefix", async () => {
-		overrideToolAvailability("fd", false);
-		const result = await executeTool("fd", { pattern: "hello" }, repoDir);
-		expect(result).toContain("hello.ts");
-		// Lines should not start with ./
-		for (const line of result.split("\n").filter((l) => l.trim())) {
-			expect(line).not.toMatch(/^\.\//);
-		}
+	test("returns empty array when all tools are available", async () => {
+		overrideToolAvailability("rg", true);
+		overrideToolAvailability("fd", true);
+		const missing = await validateRequiredTools();
+		expect(missing).toEqual([]);
 	});
 
-	test("respects type: f", async () => {
-		overrideToolAvailability("fd", false);
-		const result = await executeTool("fd", { pattern: ".", type: "f" }, repoDir);
-		expect(result).toContain("hello.ts");
-		// Should not contain directory names without extensions
-		const lines = result.split("\n").filter((l) => l.trim());
-		for (const line of lines) {
-			expect(line).toMatch(/\.\w+$/); // has a file extension
-		}
+	test("returns 'rg' when ripgrep is missing", async () => {
+		overrideToolAvailability("rg", false);
+		overrideToolAvailability("fd", true);
+		const missing = await validateRequiredTools();
+		expect(missing).toEqual(["rg"]);
 	});
 
-	test("respects extension filter", async () => {
+	test("returns 'fd' when fd is missing", async () => {
+		overrideToolAvailability("rg", true);
 		overrideToolAvailability("fd", false);
-		const result = await executeTool("fd", { pattern: ".", extension: "json" }, repoDir);
-		expect(result).toContain("hello.json");
-		expect(result).not.toContain("hello.ts");
+		const missing = await validateRequiredTools();
+		expect(missing).toEqual(["fd"]);
 	});
 
-	test("excludes hidden files by default", async () => {
+	test("returns both when both are missing", async () => {
+		overrideToolAvailability("rg", false);
 		overrideToolAvailability("fd", false);
-		await writeFile(join(repoDir, ".hidden_config"), "secret=value\n");
-
-		const withoutHidden = await executeTool("fd", { pattern: "hidden_config" }, repoDir);
-		expect(withoutHidden).not.toContain(".hidden_config");
-
-		const withHidden = await executeTool("fd", { pattern: "hidden_config", hidden: true }, repoDir);
-		expect(withHidden).toContain(".hidden_config");
-	});
-
-	test("respects max_depth", async () => {
-		overrideToolAvailability("fd", false);
-		const result = await executeTool("fd", { pattern: ".", type: "f", max_depth: 1 }, repoDir);
-		expect(result).toContain("hello.ts");
-		expect(result).not.toContain("app.ts");
-		expect(result).not.toContain("file.txt");
+		const missing = await validateRequiredTools();
+		expect(missing).toEqual(["rg", "fd"]);
 	});
 });

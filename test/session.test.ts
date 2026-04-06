@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { Repo } from "../src/forge";
 import { type Logger, nullLogger } from "../src/logger";
 import { type Message, Session, type SessionConfig } from "../src/session";
+import { overrideToolAvailability } from "../src/tools";
 
 // Mock repo for testing
 function createMockRepo(): Repo {
@@ -83,12 +84,21 @@ function createMockStream(): SessionConfig["stream"] {
 	return (() => createMockStreamResult()) as unknown as SessionConfig["stream"];
 }
 
+/** Minimal tool stubs matching the names used by createToolCallStreamResult. */
+const mockTools = [
+	{ name: "rg", description: "search", parameters: {} },
+	{ name: "fd", description: "find", parameters: {} },
+	{ name: "read", description: "read", parameters: {} },
+	{ name: "ls", description: "list", parameters: {} },
+	{ name: "git", description: "git", parameters: {} },
+] as SessionConfig["tools"];
+
 // Mock config for testing
 function createMockConfig(overrides?: Partial<SessionConfig>): SessionConfig {
 	return {
 		model: {} as Model<Api>, // Mock model - not used in these tests
 		systemPrompt: "You are a test assistant",
-		tools: [],
+		tools: mockTools,
 		maxIterations: 5,
 		executeTool: async () => "mock result",
 		logger: nullLogger, // Suppress logging in tests by default
@@ -268,6 +278,34 @@ describe("Session", () => {
 	});
 
 	describe("ask", () => {
+		afterEach(() => {
+			// Restore real tool availability after each test
+			overrideToolAvailability("rg", true);
+			overrideToolAvailability("fd", true);
+		});
+
+		test("returns error result when required tools are missing", async () => {
+			overrideToolAvailability("rg", false);
+			overrideToolAvailability("fd", false);
+
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.ask("Hello");
+
+			expect(result.response).toContain("[ERROR: Required tools not installed: rg, fd");
+			expect(result.usage.totalTokens).toBe(0); // No LLM call was made
+		});
+
+		test("skips tool validation when skipToolValidation is true", async () => {
+			overrideToolAvailability("rg", false);
+			overrideToolAvailability("fd", false);
+
+			const session = new Session(createMockRepo(), createMockConfig({ skipToolValidation: true }));
+			const result = await session.ask("Hello");
+
+			// Should succeed because validation was skipped
+			expect(result.response).toBe("Hello world");
+		});
+
 		test("returns response from mock stream", async () => {
 			const repo = createMockRepo();
 			const session = new Session(repo, createMockConfig());
@@ -560,6 +598,11 @@ describe("Session", () => {
 				createMockRepo(),
 				createMockConfig({
 					stream: customStream,
+					tools: [
+						{ name: "tool1", description: "", parameters: {} },
+						{ name: "tool2", description: "", parameters: {} },
+						{ name: "tool3", description: "", parameters: {} },
+					] as SessionConfig["tools"],
 					executeTool: async (name) => {
 						const start = Date.now();
 						await Bun.sleep(50);
@@ -596,6 +639,25 @@ describe("Session", () => {
 
 			const result = await session.ask("Do something");
 			expect(result.response).toContain("Max iterations reached");
+		});
+
+		test("returns error when model calls unknown tool", async () => {
+			const customStream = (() =>
+				createToolCallStreamResult([
+					{ name: "nonexistent_tool", arguments: { foo: "bar" } },
+				])) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					tools: [{ name: "rg", description: "search", parameters: {} as never }],
+				}),
+			);
+
+			const result = await session.ask("Do something");
+			expect(result.response).toContain("Unknown tool(s): nonexistent_tool");
+			expect(result.response).toContain("Ensure the required tools");
 		});
 
 		test("usage accumulates across iterations", async () => {

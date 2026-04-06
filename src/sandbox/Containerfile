@@ -7,7 +7,7 @@ FROM oven/bun:1-alpine AS builder
 RUN apk add --no-cache gcc musl-dev libseccomp-dev libseccomp-static linux-headers
 
 # Copy and build seccomp tools
-COPY isolation/seccomp/ /build/
+COPY sandbox/isolation/seccomp/ /build/
 WORKDIR /build
 
 # Build the BPF filter generator and generate the filter
@@ -23,7 +23,7 @@ FROM oven/bun:1-alpine
 RUN apk add --no-cache \
     git \
     ripgrep \
-    findutils \
+    fd \
     coreutils \
     bubblewrap \
     bash \
@@ -39,12 +39,16 @@ RUN ARCH=$(uname -m) \
     && mkdir -p /etc/seccomp/$ARCH \
     && mv /tmp/net-block.bpf /etc/seccomp/$ARCH/net-block.bpf
 
-COPY worker.ts /app/worker.ts
-COPY isolation/index.ts /app/isolation/index.ts
+# Copy application files — layout must match import paths:
+#   worker.ts imports "../tool-commands" → /app/tool-commands.ts
+#   worker.ts imports "./isolation"      → /app/sandbox/isolation/index.ts
+COPY sandbox/worker.ts /app/sandbox/worker.ts
+COPY sandbox/isolation/index.ts /app/sandbox/isolation/index.ts
+COPY tool-commands.ts /app/tool-commands.ts
 
 USER forge
 WORKDIR /home/forge
 
 EXPOSE 8080
 
-CMD ["bun", "run", "/app/worker.ts"]
+CMD ["bun", "run", "/app/sandbox/worker.ts"]

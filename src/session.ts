@@ -16,6 +16,7 @@ import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { type ParsedLink, validateLinks } from "./response-validation";
 import { processStream, type StreamFn } from "./stream-processor";
+import { validateRequiredTools } from "./tools";
 import {
 	endAskSpan,
 	endAskSpanWithError,
@@ -219,6 +220,13 @@ export interface SessionConfig {
 	compaction?: Partial<CompactionSettings>;
 	/** Thinking configuration. If omitted, thinking is off. */
 	thinking?: ThinkingConfig;
+	/**
+	 * Skip tool availability validation before LLM calls.
+	 * Set to true for sandbox sessions where tools are guaranteed to be installed.
+	 * When false/omitted, ask() validates that required binaries (rg, fd) are installed
+	 * and returns an error result before making any LLM call if they are missing.
+	 */
+	skipToolValidation?: boolean;
 }
 
 /**
@@ -362,6 +370,18 @@ export class Session {
 			usage: createEmptyUsage(),
 			startTime: Date.now(),
 		};
+
+		// Validate required tools before making any LLM call
+		if (!this.#config.skipToolValidation) {
+			const missing = await validateRequiredTools();
+			if (missing.length > 0) {
+				const names = missing.join(", ");
+				return buildResult(
+					ctx,
+					`[ERROR: Required tools not installed: ${names}. Install them before using ask-forge locally (e.g. \`brew install ripgrep fd-find\`)]`,
+				);
+			}
+		}
 
 		const modelId = `${this.#config.model.provider}/${this.#config.model.id}`;
 		const askSpan = startAskSpan({
@@ -525,6 +545,19 @@ export class Session {
 			return {
 				done: true,
 				result: this.#buildTextResponse(ctx, response, onProgress),
+			};
+		}
+
+		// Fail fast if the model hallucinated a tool name not in our list
+		const knownToolNames = new Set(this.#config.tools.map((t) => t.name));
+		const unknownTools = responseToolCalls.filter((tc) => !knownToolNames.has(tc.name));
+		if (unknownTools.length > 0) {
+			const names = unknownTools.map((tc) => tc.name).join(", ");
+			const errorMsg = `Unknown tool(s): ${names}. Ensure the required tools (rg, fd) are installed.`;
+			endGenerationSpanWithError(genSpan, errorMsg);
+			return {
+				done: true,
+				result: buildResult(ctx, `[ERROR: ${errorMsg}]`),
 			};
 		}
 

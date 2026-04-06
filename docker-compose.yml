@@ -3,8 +3,8 @@ services:
   # See sandbox/Containerfile for security layer details.
   sandbox:
     build:
-      context: ./src/sandbox
-      dockerfile: Containerfile
+      context: ./src
+      dockerfile: sandbox/Containerfile
     runtime: runsc  # gVisor required for bwrap to work with minimal caps
     cap_drop:
       - ALL

@@ -1,8 +1,9 @@
-import { isAbsolute, relative, resolve } from "node:path";
 import type { Tool } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
+import { buildToolCommand } from "./tool-commands";
 
-const RG_MAX_MATCHES_PER_FILE = 50;
+/** External binaries that must be installed for local (non-sandbox) execution. */
+const REQUIRED_BINARIES = ["rg", "fd"] as const;
 
 // ---------------------------------------------------------------------------
 // Tool availability detection
@@ -30,6 +31,19 @@ async function isAvailable(bin: string): Promise<boolean> {
 export function overrideToolAvailability(bin: string, available: boolean): void {
 	toolAvailabilityCache.set(bin, available);
 }
+
+/**
+ * Check that all required external tools are installed.
+ * Returns an empty array if everything is available, otherwise returns the names of missing tools.
+ */
+export async function validateRequiredTools(): Promise<string[]> {
+	const checks = await Promise.all(REQUIRED_BINARIES.map(async (bin) => ({ bin, available: await isAvailable(bin) })));
+	return checks.filter((c) => !c.available).map((c) => c.bin);
+}
+
+// ---------------------------------------------------------------------------
+// Tool definitions (LLM-facing schema)
+// ---------------------------------------------------------------------------
 
 export const tools: Tool[] = [
 	{
@@ -135,6 +149,10 @@ export const tools: Tool[] = [
 	},
 ];
 
+// ---------------------------------------------------------------------------
+// Local execution
+// ---------------------------------------------------------------------------
+
 async function runCommand(cmd: string[], cwd: string): Promise<string> {
 	const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
@@ -145,227 +163,10 @@ async function runCommand(cmd: string[], cwd: string): Promise<string> {
 	return stdout || "(no output)";
 }
 
-function validateProjectPath(repoPath: string, userPath: string): string | null {
-	const repoRoot = resolve(repoPath);
-	const fullPath = resolve(repoRoot, userPath);
-	const relPath = relative(repoRoot, fullPath);
-
-	if (relPath.startsWith("..") || isAbsolute(relPath)) {
-		return null;
-	}
-
-	return fullPath;
-}
-
-// ---------------------------------------------------------------------------
-// Command builders — rg / grep
-// ---------------------------------------------------------------------------
-
-export function buildRgCommand(args: Record<string, unknown>): string[] {
-	const pattern = args.pattern as string;
-	const glob = args.glob as string | undefined;
-	const maxCount = (args.max_count as number | undefined) ?? RG_MAX_MATCHES_PER_FILE;
-	const word = args.word as boolean | undefined;
-
-	const cmd = ["rg", "--line-number", "--max-count", String(maxCount), pattern];
-	if (glob) cmd.push("--glob", glob);
-	if (word) cmd.push("-w");
-	return cmd;
-}
-
-export function buildGrepCommand(args: Record<string, unknown>): string[] {
-	const pattern = args.pattern as string;
-	const glob = args.glob as string | undefined;
-	const maxCount = (args.max_count as number | undefined) ?? RG_MAX_MATCHES_PER_FILE;
-	const word = args.word as boolean | undefined;
-
-	const cmd = ["grep", "-rn", "-I", "-m", String(maxCount)];
-	if (glob) cmd.push(`--include=${glob}`);
-	if (word) cmd.push("-w");
-	cmd.push(pattern, ".");
-	return cmd;
-}
-
-async function executeRg(args: Record<string, unknown>, repoPath: string): Promise<string> {
-	const maxResults = args.max_results as number | undefined;
-	const rgAvailable = await isAvailable("rg");
-	const cmd = rgAvailable ? buildRgCommand(args) : buildGrepCommand(args);
-
-	const result = await runCommand(cmd, repoPath);
-
-	if (maxResults && !result.startsWith("Error")) {
-		const lines = result.split("\n").filter((l) => l.trim().length > 0);
-		return lines.slice(0, maxResults).join("\n");
-	}
-
-	return result;
-}
-
-// ---------------------------------------------------------------------------
-// Command builders — fd / find
-// ---------------------------------------------------------------------------
-
-export function buildFdCommand(args: Record<string, unknown>): string[] {
-	const pattern = args.pattern as string;
-	const type = args.type as "f" | "d" | "l" | "x" | undefined;
-	const extension = args.extension as string | undefined;
-	const maxDepth = args.max_depth as number | undefined;
-	const maxResults = args.max_results as number | undefined;
-	const hidden = args.hidden as boolean | undefined;
-	const glob = args.glob as boolean | undefined;
-	const exclude = args.exclude as string | undefined;
-	const fullPath = args.full_path as boolean | undefined;
-
-	const cmd = ["fd"];
-
-	if (type) cmd.push("--type", type);
-	if (hidden) cmd.push("--hidden");
-	if (glob) cmd.push("--glob");
-	if (fullPath) cmd.push("--full-path");
-	if (maxDepth !== undefined) cmd.push("--max-depth", String(maxDepth));
-	if (maxResults !== undefined) cmd.push("--max-results", String(maxResults));
-	if (exclude) cmd.push("--exclude", exclude);
-
-	if (extension) {
-		for (const ext of extension.split(",").map((e) => e.trim())) {
-			cmd.push("--extension", ext);
-		}
-	}
-
-	cmd.push(pattern);
-	return cmd;
-}
-
-export function buildFindCommand(args: Record<string, unknown>): string[] {
-	const pattern = args.pattern as string;
-	const type = args.type as "f" | "d" | "l" | "x" | undefined;
-	const extension = args.extension as string | undefined;
-	const maxDepth = args.max_depth as number | undefined;
-	const hidden = args.hidden as boolean | undefined;
-	const glob = args.glob as boolean | undefined;
-	const exclude = args.exclude as string | undefined;
-	const fullPath = args.full_path as boolean | undefined;
-
-	const cmd = ["find", "."];
-
-	// maxdepth must come before other predicates in find
-	if (maxDepth !== undefined) cmd.push("-maxdepth", String(maxDepth));
-
-	// Exclude hidden files by default (fd behavior)
-	if (!hidden) cmd.push("-not", "-path", "*/.*");
-
-	// Exclude pattern
-	if (exclude) cmd.push("-not", "-path", `*/${exclude}/*`);
-
-	// Type filter
-	if (type === "x") {
-		cmd.push("-type", "f", "-perm", "+111");
-	} else if (type) {
-		cmd.push("-type", type);
-	}
-
-	// Extension filter (takes precedence over pattern matching)
-	if (extension) {
-		const exts = extension.split(",").map((e) => e.trim());
-		if (exts.length === 1) {
-			cmd.push("-name", `*.${exts[0]}`);
-		} else {
-			cmd.push("(");
-			for (let i = 0; i < exts.length; i++) {
-				if (i > 0) cmd.push("-o");
-				cmd.push("-name", `*.${exts[i]}`);
-			}
-			cmd.push(")");
-		}
-	} else if (fullPath) {
-		// Match pattern against full path
-		cmd.push("-path", `*${pattern}*`);
-	} else if (glob) {
-		// Glob mode: use pattern as-is
-		cmd.push("-name", pattern);
-	} else {
-		// Default: glob approximation of regex
-		cmd.push("-name", `*${pattern}*`);
-	}
-
-	return cmd;
-}
-
-/** Strip ./ prefix from find output lines for consistency with fd. */
-function stripFindPrefix(output: string): string {
-	return output
-		.split("\n")
-		.map((line) => (line.startsWith("./") ? line.slice(2) : line))
-		.filter((line) => line.trim().length > 0 && line !== ".")
-		.join("\n");
-}
-
-async function executeFd(args: Record<string, unknown>, repoPath: string): Promise<string> {
-	const maxResults = args.max_results as number | undefined;
-	const fdAvailable = await isAvailable("fd");
-	const cmd = fdAvailable ? buildFdCommand(args) : buildFindCommand(args);
-
-	const result = await runCommand(cmd, repoPath);
-
-	if (result.startsWith("Error")) return result;
-
-	if (!fdAvailable) {
-		const stripped = stripFindPrefix(result);
-		if (maxResults) {
-			const lines = stripped.split("\n").filter((l) => l.trim().length > 0);
-			return lines.slice(0, maxResults).join("\n") || "(no output)";
-		}
-		return stripped || "(no output)";
-	}
-
-	return result;
-}
-
-async function executeLs(args: Record<string, unknown>, repoPath: string): Promise<string> {
-	const path = (args.path as string | undefined) || ".";
-	const fullPath = validateProjectPath(repoPath, path);
-	if (!fullPath) {
-		return `Error: invalid project path: ${path}`;
-	}
-
-	return runCommand(["ls", "-la", fullPath], repoPath);
-}
-
-async function executeRead(args: Record<string, unknown>, repoPath: string): Promise<string> {
-	const filePath = args.path as string;
-	const fullPath = validateProjectPath(repoPath, filePath);
-	if (!fullPath) {
-		return `Error: invalid project path: ${filePath}`;
-	}
-
-	const content = await runCommand(["cat", "-n", fullPath], repoPath);
-	if (content.startsWith("Error")) {
-		return content;
-	}
-	return `[File: ${filePath}]\n\n${content}`;
-}
-
-async function executeGit(args: Record<string, unknown>, repoPath: string): Promise<string> {
-	const command = args.command as string;
-	const gitArgs = (args.args as string[]) || [];
-
-	const cmd = ["git", command, ...gitArgs];
-	return runCommand(cmd, repoPath);
-}
-
 export async function executeTool(toolName: string, args: Record<string, unknown>, repoPath: string): Promise<string> {
-	switch (toolName) {
-		case "rg":
-			return executeRg(args, repoPath);
-		case "fd":
-			return executeFd(args, repoPath);
-		case "ls":
-			return executeLs(args, repoPath);
-		case "read":
-			return executeRead(args, repoPath);
-		case "git":
-			return executeGit(args, repoPath);
-		default:
-			return `Unknown tool: ${toolName}`;
-	}
+	const toolCmd = buildToolCommand(toolName, args, repoPath);
+	if (!toolCmd.ok) return toolCmd.error;
+
+	const output = await runCommand(toolCmd.cmd, repoPath);
+	return toolCmd.postProcess ? toolCmd.postProcess(output) : output;
 }

@@ -267,11 +267,20 @@ function createErrorStreamResult() {
 	};
 }
 
+/** Minimal tool stubs matching the names used by createToolCallStreamResult. */
+const mockTools = [
+	{ name: "rg", description: "search", parameters: {} },
+	{ name: "fd", description: "find", parameters: {} },
+	{ name: "read", description: "read", parameters: {} },
+	{ name: "ls", description: "list", parameters: {} },
+	{ name: "git", description: "git", parameters: {} },
+] as SessionConfig["tools"];
+
 function createMockConfig(overrides?: Partial<SessionConfig>): SessionConfig {
 	return {
 		model: { id: "test-model", provider: "test-provider" } as Model<Api>,
 		systemPrompt: "You are a test assistant",
-		tools: [],
+		tools: mockTools,
 		maxIterations: 5,
 		executeTool: async () => "mock tool result",
 		logger: nullLogger,
