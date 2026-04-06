@@ -7,6 +7,12 @@
 
 Megasthenes allows you to programmatically ask questions to a GitHub/GitLab repository.
 
+> **Why "Megasthenes"?**
+>
+> Megasthenes was a Greek ambassador sent to the Maurya court around 300 BCE. He spent years in an unfamiliar land, observed carefully, and wrote *Indica* — one of the first detailed accounts of the Indian subcontinent by an outsider. Not a tourist's diary, but a structured report: governance, geography, trade routes, how things actually worked.
+>
+> This library does something similar with codebases. You drop it into a repository it has never seen, and it pokes around — reads files, greps for patterns, walks the git history — until it can give you a coherent, sourced answer about what's in there.
+
 ## Features
 
 - 🔗 **Ask questions about any GitHub/GitLab repository**: Point it at any public or private repository URL and start asking questions in plain language.
