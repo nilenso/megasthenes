@@ -1,5 +1,5 @@
 {
-	"name": "ask-forge",
+	"name": "megasthenes",
 	"module": "src/index.ts",
 	"type": "module",
 	"scripts": {

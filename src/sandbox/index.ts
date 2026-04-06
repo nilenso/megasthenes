@@ -2,7 +2,7 @@
  * Sandbox module — isolated git and tool execution.
  *
  * This module is for internal use. External users should interact with
- * the sandbox via its HTTP API (see README.md) or use the main ask-forge
+ * the sandbox via its HTTP API (see README.md) or use the main megasthenes
  * `connect()` API which handles sandboxing transparently.
  *
  * Components:

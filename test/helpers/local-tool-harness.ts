@@ -21,7 +21,7 @@ export interface ToolExecutionResult {
 }
 
 export async function createLocalWorkspace(): Promise<LocalWorkspace> {
-	const baseDir = await mkdtemp(join(tmpdir(), "ask-forge-local-tools-"));
+	const baseDir = await mkdtemp(join(tmpdir(), "megasthenes-local-tools-"));
 	const repoDir = join(baseDir, "repo");
 	const siblingDir = join(baseDir, "repo-sibling");
 

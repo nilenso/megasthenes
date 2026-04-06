@@ -1,11 +1,11 @@
 ---
 title: Sandboxed Execution
-description: Run ask-forge in an isolated sandbox for secure code analysis.
+description: Run megasthenes in an isolated sandbox for secure code analysis.
 sidebar:
   order: 3
 ---
 
-ask-forge can execute all repository operations inside an isolated sandbox, providing multiple layers of security.
+megasthenes can execute all repository operations inside an isolated sandbox, providing multiple layers of security.
 
 ### Architecture
 
@@ -14,7 +14,7 @@ ask-forge can execute all repository operations inside an isolated sandbox, prov
 ### Enabling Sandbox Mode
 
 ```ts
-const client = new AskForgeClient({
+const client = new Client({
   provider: "openrouter",
   model: "anthropic/claude-sonnet-4-20250514",
   sandbox: {
@@ -49,7 +49,7 @@ bun run web/server.ts
 Or via container:
 
 ```bash
-podman run -p 8080:8080 ask-forge-sandbox
+podman run -p 8080:8080 megasthenes-sandbox
 ```
 
 ### Resetting the Sandbox

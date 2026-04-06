@@ -14,7 +14,7 @@ import {
 let repoDir: string;
 
 beforeEach(async () => {
-	repoDir = await mkdtemp(join(tmpdir(), "ask-forge-tools-"));
+	repoDir = await mkdtemp(join(tmpdir(), "megasthenes-tools-"));
 
 	await mkdir(join(repoDir, "src"), { recursive: true });
 	await mkdir(join(repoDir, "nested", "deep"), { recursive: true });

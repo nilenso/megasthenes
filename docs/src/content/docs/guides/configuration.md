@@ -29,26 +29,26 @@ const session = await client.connect("https://gitlab.example.com/owner/repo", {
 
 ### Model and Provider
 
-The `AskForgeClient` accepts a `ForgeConfig` object that controls the AI model and behavior.
+The `Client` accepts a `ForgeConfig` object that controls the AI model and behavior.
 
 By default, the client uses **OpenRouter** with **`anthropic/claude-sonnet-4.6`**. You can override both `provider` and `model` (they must be specified together). The corresponding API key environment variable is resolved automatically (e.g. `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`).
 
 Available providers and model IDs are defined in [`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/blob/main/packages/pi-ai/src/models.generated.ts).
 
 ```ts
-import { AskForgeClient, type ForgeConfig } from "@nilenso/ask-forge";
+import { Client, type ForgeConfig } from "@nilenso/megasthenes";
 
 // Use defaults (openrouter + anthropic/claude-sonnet-4.6)
-const client = new AskForgeClient();
+const client = new Client();
 
 // Or specify a different provider/model
-const client = new AskForgeClient({
+const client = new Client({
   provider: "anthropic",
   model: "claude-sonnet-4.6",
 });
 
 // Full configuration
-const client = new AskForgeClient({
+const client = new Client({
   provider: "openrouter",
   model: "anthropic/claude-sonnet-4.6",
   maxIterations: 10,                    // Optional: default is 20
@@ -57,10 +57,10 @@ const client = new AskForgeClient({
 
 ### System Prompt
 
-By default, ask-forge builds a system prompt that includes the repository URL and commit SHA. You can override it to customize the assistant's behavior:
+By default, megasthenes builds a system prompt that includes the repository URL and commit SHA. You can override it to customize the assistant's behavior:
 
 ```ts
-const client = new AskForgeClient({
+const client = new Client({
   systemPrompt: "You are a security auditor. Focus on identifying vulnerabilities, insecure patterns, and potential attack vectors in the codebase.",
 });
 ```
@@ -68,10 +68,10 @@ const client = new AskForgeClient({
 You can also build the default prompt yourself and extend it:
 
 ```ts
-import { AskForgeClient, buildDefaultSystemPrompt } from "@nilenso/ask-forge";
+import { Client, buildDefaultSystemPrompt } from "@nilenso/megasthenes";
 
 const base = buildDefaultSystemPrompt("https://github.com/owner/repo", "abc123");
-const client = new AskForgeClient({
+const client = new Client({
   systemPrompt: `${base}\n\nAlways respond in Spanish.`,
 });
 ```
@@ -82,24 +82,24 @@ The second parameter to the constructor controls logging:
 
 ```ts
 import {
-  AskForgeClient,
+  Client,
   consoleLogger,
   nullLogger,
   type Logger,
-} from "@nilenso/ask-forge";
+} from "@nilenso/megasthenes";
 
 // Use console logger (default)
-const client = new AskForgeClient(config, consoleLogger);
+const client = new Client(config, consoleLogger);
 
 // Silence all logging
-const client = new AskForgeClient(config, nullLogger);
+const client = new Client(config, nullLogger);
 
 // Custom logger
 const customLogger: Logger = {
   log: (label, content) => myLogSystem.info(`${label}: ${content}`),
   error: (label, error) => myLogSystem.error(label, error),
 };
-const client = new AskForgeClient(config, customLogger);
+const client = new Client(config, customLogger);
 ```
 
 ### Sandboxing
@@ -107,7 +107,7 @@ const client = new AskForgeClient(config, customLogger);
 For production deployments or untrusted repositories, enable sandbox mode to run all operations in an isolated container:
 
 ```ts
-const client = new AskForgeClient({
+const client = new Client({
   sandbox: {
     baseUrl: "http://localhost:8080",
     timeoutMs: 120_000,
@@ -118,46 +118,46 @@ const client = new AskForgeClient({
 
 When enabled, repository cloning and all tool execution (file reads, searches, git operations) happen inside the sandbox. The host filesystem is never accessed directly.
 
-See the [Sandboxed Execution guide](/ask-forge/guides/sandbox/) for security layers, architecture, and how to run the sandbox server.
+See the [Sandboxed Execution guide](/megasthenes/guides/sandbox/) for security layers, architecture, and how to run the sandbox server.
 
 ### Thinking
 
-Control the model's reasoning/thinking behavior via the `thinking` field. Ask Forge supports two modes:
+Control the model's reasoning/thinking behavior via the `thinking` field. Megasthenes supports two modes:
 
 - **Effort-based** (cross-provider): Set an effort level that pi-ai maps to each provider's native format (`reasoning.effort` for OpenAI, `thinking` for Anthropic, etc.)
 - **Adaptive** (Anthropic 4.6 only): The model decides when and how much to think per request
 
 ```ts
 // OpenAI — effort-based reasoning
-const client = new AskForgeClient({
+const client = new Client({
   provider: "openai",
   model: "o3",
   thinking: { effort: "low" },
 });
 
 // Anthropic 4.5 — effort-based (older model, no adaptive support)
-const client = new AskForgeClient({
+const client = new Client({
   provider: "anthropic",
   model: "claude-sonnet-4-5-20251022",
   thinking: { effort: "high", budgetOverrides: { high: 10000 } },
 });
 
 // Anthropic 4.6 — adaptive (model decides when/how much to think)
-const client = new AskForgeClient({
+const client = new Client({
   provider: "anthropic",
   model: "claude-sonnet-4-6",
   thinking: { type: "adaptive" },
 });
 
 // Anthropic 4.6 — adaptive with explicit effort guidance
-const client = new AskForgeClient({
+const client = new Client({
   provider: "anthropic",
   model: "claude-sonnet-4-6",
   thinking: { type: "adaptive", effort: "medium" },
 });
 
 // No thinking (default)
-const client = new AskForgeClient();
+const client = new Client();
 ```
 
 | Field | Type | Description |
@@ -168,10 +168,10 @@ const client = new AskForgeClient();
 
 ### Context Compaction
 
-When conversations grow long, ask-forge can automatically summarize older messages to stay within the model's context window. This is enabled by default.
+When conversations grow long, megasthenes can automatically summarize older messages to stay within the model's context window. This is enabled by default.
 
 ```ts
-const client = new AskForgeClient({
+const client = new Client({
   compaction: {
     enabled: true,            // default: true
     contextWindow: 200_000,   // default: 200K tokens
@@ -183,12 +183,12 @@ const client = new AskForgeClient({
 
 ### Tracing
 
-ask-forge emits [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). The library depends only on `@opentelemetry/api` — if no OTel SDK is installed, all tracing is a zero-overhead no-op.
+megasthenes emits [OpenTelemetry](https://opentelemetry.io/) spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). The library depends only on `@opentelemetry/api` — if no OTel SDK is installed, all tracing is a zero-overhead no-op.
 
 To send traces to any OTel-compatible backend (Jaeger, Honeycomb, Langfuse, etc.):
 
 1. Install `@opentelemetry/sdk-node` and your backend's exporter or span processor
-2. Create and start a `NodeSDK` instance **before** creating any `AskForgeClient`
+2. Create and start a `NodeSDK` instance **before** creating any `Client`
 3. All `session.ask()` calls will automatically emit spans to your backend
 
 #### Console (development)
@@ -213,7 +213,7 @@ const sdk = new NodeSDK({
 sdk.start();
 ```
 
-See the [Observability guide](/ask-forge/guides/observability/) for the full trace structure and captured metrics.
+See the [Observability guide](/megasthenes/guides/observability/) for the full trace structure and captured metrics.
 
 ### Streaming Progress
 

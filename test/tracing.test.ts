@@ -299,8 +299,8 @@ function expectSpanErrorDetails(
 	expect(span?.status.code).toBe(SpanStatusCode.ERROR);
 	expect(span?.status.message).toBe(message);
 	expect(span?.attributes["error.type"]).toBe(errorType);
-	expect(span?.attributes["ask_forge.error.name"]).toBe(name);
-	expect(span?.attributes["ask_forge.error.message"]).toBe(message);
+	expect(span?.attributes["megasthenes.error.name"]).toBe(name);
+	expect(span?.attributes["megasthenes.error.message"]).toBe(message);
 	expect(span?.exceptions.length).toBe(exceptionCount);
 	if (exceptionCount > 0) {
 		expect(span?.exceptions[0]?.message).toBe(exceptionMessage);
@@ -332,9 +332,9 @@ describe("OTel tracing", () => {
 			expect(span).toBeDefined();
 			expect(span?.attributes["gen_ai.operation.name"]).toBe("chat");
 			expect(span?.attributes["gen_ai.request.model"]).toBe("test-provider/test-model");
-			expect(span?.attributes["ask_forge.session.id"]).toBe(session.id);
-			expect(span?.attributes["ask_forge.repo.url"]).toBe("https://github.com/test/repo");
-			expect(span?.attributes["ask_forge.repo.commitish"]).toBe("abc123");
+			expect(span?.attributes["megasthenes.session.id"]).toBe(session.id);
+			expect(span?.attributes["megasthenes.repo.url"]).toBe("https://github.com/test/repo");
+			expect(span?.attributes["megasthenes.repo.commitish"]).toBe("abc123");
 			expect(span?.ended).toBe(true);
 			expect(span?.status.code).toBe(SpanStatusCode.OK);
 		});
@@ -363,10 +363,10 @@ describe("OTel tracing", () => {
 			const span = recorder.getSpan("ask");
 			expect(span?.attributes["gen_ai.usage.input_tokens"]).toBe(200);
 			expect(span?.attributes["gen_ai.usage.output_tokens"]).toBe(80);
-			expect(span?.attributes["ask_forge.response.total_links"]).toBe(0);
-			expect(span?.attributes["ask_forge.response.invalid_links"]).toBe(0);
-			expect(span?.attributes["ask_forge.total_iterations"]).toBe(2);
-			expect(span?.attributes["ask_forge.total_tool_calls"]).toBe(1);
+			expect(span?.attributes["megasthenes.response.total_links"]).toBe(0);
+			expect(span?.attributes["megasthenes.response.invalid_links"]).toBe(0);
+			expect(span?.attributes["megasthenes.total_iterations"]).toBe(2);
+			expect(span?.attributes["megasthenes.total_tool_calls"]).toBe(1);
 		});
 
 		test("each ask() creates a separate root span", async () => {
@@ -376,7 +376,7 @@ describe("OTel tracing", () => {
 
 			const askSpans = recorder.getSpans("ask");
 			expect(askSpans.length).toBe(2);
-			expect(askSpans[0]?.attributes["ask_forge.session.id"]).toBe(askSpans[1]?.attributes["ask_forge.session.id"]);
+			expect(askSpans[0]?.attributes["megasthenes.session.id"]).toBe(askSpans[1]?.attributes["megasthenes.session.id"]);
 		});
 	});
 
@@ -393,7 +393,7 @@ describe("OTel tracing", () => {
 			const compSpan = recorder.getSpan("compaction");
 			expect(compSpan).toBeDefined();
 			expect(compSpan?.parentSpanId).toBe(askSpan?.spanId);
-			expect(compSpan?.attributes["ask_forge.compaction.was_compacted"]).toBe(false);
+			expect(compSpan?.attributes["megasthenes.compaction.was_compacted"]).toBe(false);
 			expect(compSpan?.ended).toBe(true);
 		});
 	});
@@ -411,7 +411,7 @@ describe("OTel tracing", () => {
 			expect(genSpan).toBeDefined();
 			expect(genSpan?.attributes["gen_ai.request.model"]).toBe("test-provider/test-model");
 			expect(genSpan?.attributes["gen_ai.provider.name"]).toBe("test-provider");
-			expect(genSpan?.attributes["ask_forge.iteration"]).toBe(1);
+			expect(genSpan?.attributes["megasthenes.iteration"]).toBe(1);
 			expect(genSpan?.status.code).toBe(SpanStatusCode.OK);
 		});
 
@@ -460,8 +460,8 @@ describe("OTel tracing", () => {
 
 			const genSpans = recorder.getSpans("gen_ai.chat");
 			expect(genSpans.length).toBe(2);
-			expect(genSpans[0]?.attributes["ask_forge.iteration"]).toBe(1);
-			expect(genSpans[1]?.attributes["ask_forge.iteration"]).toBe(2);
+			expect(genSpans[0]?.attributes["megasthenes.iteration"]).toBe(1);
+			expect(genSpans[1]?.attributes["megasthenes.iteration"]).toBe(2);
 		});
 
 		test("records exception on stream error", async () => {
@@ -589,7 +589,7 @@ describe("OTel tracing", () => {
 			// Generation ended with error
 			expect(genSpan?.status.code).toBe(SpanStatusCode.ERROR);
 			expect(genSpan?.attributes["error.type"]).toBe("generation_failed");
-			expect(genSpan?.attributes["ask_forge.error.message"]).toBe("Rate limit exceeded");
+			expect(genSpan?.attributes["megasthenes.error.message"]).toBe("Rate limit exceeded");
 			expect(genSpan?.ended).toBe(true);
 
 			// Ask span still ended (no orphan)

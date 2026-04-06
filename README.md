@@ -1,11 +1,11 @@
-# Ask Forge
+# Megasthenes
 
-[![CI](https://github.com/nilenso/ask-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/nilenso/ask-forge/actions/workflows/ci.yml)
-[![JSR](https://jsr.io/badges/@nilenso/ask-forge)](https://jsr.io/@nilenso/ask-forge)
+[![CI](https://github.com/nilenso/megasthenes/actions/workflows/ci.yml/badge.svg)](https://github.com/nilenso/megasthenes/actions/workflows/ci.yml)
+[![JSR](https://jsr.io/badges/@nilenso/megasthenes)](https://jsr.io/@nilenso/megasthenes)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-f9f1e1?logo=bun&logoColor=black)](https://bun.sh/)
 
-Ask Forge allows you to programmatically ask questions to a GitHub/GitLab repository.
+Megasthenes allows you to programmatically ask questions to a GitHub/GitLab repository.
 
 ## Features
 
@@ -29,15 +29,15 @@ Ask Forge allows you to programmatically ask questions to a GitHub/GitLab reposi
 
 ```bash
 # Using JSR (recommended)
-bunx jsr add @nilenso/ask-forge
+bunx jsr add @nilenso/megasthenes
 
 # Or with npx
-npx jsr add @nilenso/ask-forge
+npx jsr add @nilenso/megasthenes
 ```
 
 For Docker or manual setup, add to `package.json`:
 ```json
-"@nilenso/ask-forge": "npm:@jsr/nilenso__ask-forge@0.0.7"
+"@nilenso/megasthenes": "npm:@jsr/nilenso__megasthenes@0.0.7"
 ```
 
 And create `.npmrc`:
@@ -48,10 +48,10 @@ And create `.npmrc`:
 ## Usage
 
 ```typescript
-import { AskForgeClient } from "@nilenso/ask-forge";
+import { Client } from "@nilenso/megasthenes";
 
 // Create a client (defaults to openrouter with claude-sonnet-4.6)
-const client = new AskForgeClient();
+const client = new Client();
 
 // Connect to a repository
 const session = await client.connect("https://github.com/owner/repo");
@@ -64,4 +64,4 @@ console.log(result.response);
 session.close();
 ```
 
-For configuration, sandboxing, observability, and the full API reference, see the [documentation](https://nilenso.github.io/ask-forge/).
+For configuration, sandboxing, observability, and the full API reference, see the [documentation](https://nilenso.github.io/megasthenes/).
