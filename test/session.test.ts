@@ -295,17 +295,6 @@ describe("Session", () => {
 			expect(result.usage.totalTokens).toBe(0); // No LLM call was made
 		});
 
-		test("skips tool validation when skipToolValidation is true", async () => {
-			overrideToolAvailability("rg", false);
-			overrideToolAvailability("fd", false);
-
-			const session = new Session(createMockRepo(), createMockConfig({ skipToolValidation: true }));
-			const result = await session.ask("Hello");
-
-			// Should succeed because validation was skipped
-			expect(result.response).toBe("Hello world");
-		});
-
 		test("returns response from mock stream", async () => {
 			const repo = createMockRepo();
 			const session = new Session(repo, createMockConfig());
@@ -641,23 +630,34 @@ describe("Session", () => {
 			expect(result.response).toContain("Max iterations reached");
 		});
 
-		test("returns error when model calls unknown tool", async () => {
-			const customStream = (() =>
-				createToolCallStreamResult([
-					{ name: "nonexistent_tool", arguments: { foo: "bar" } },
-				])) as unknown as SessionConfig["stream"];
+		test("unknown tool call flows back as error and model can respond", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "nonexistent_tool", arguments: { foo: "bar" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
 
+			const executedTools: string[] = [];
 			const session = new Session(
 				createMockRepo(),
 				createMockConfig({
 					stream: customStream,
-					tools: [{ name: "rg", description: "search", parameters: {} as never }],
+					tools: mockTools,
+					executeTool: async (name) => {
+						executedTools.push(name);
+						return `Unknown tool: ${name}`;
+					},
 				}),
 			);
 
 			const result = await session.ask("Do something");
-			expect(result.response).toContain("Unknown tool(s): nonexistent_tool");
-			expect(result.response).toContain("Ensure the required tools");
+			// Tool call flowed through to executeTool
+			expect(executedTools).toEqual(["nonexistent_tool"]);
+			// Model got a second iteration and produced a normal response
+			expect(result.response).toBe("Hello world");
 		});
 
 		test("usage accumulates across iterations", async () => {

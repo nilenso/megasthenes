@@ -197,7 +197,6 @@ export class Client {
 				streamSimple,
 				compaction: config.compaction,
 				thinking: config.thinking,
-				skipToolValidation: true,
 			});
 		}
 

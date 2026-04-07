@@ -492,7 +492,7 @@ describe("sandbox git tool", () => {
 			command: "log",
 			args: ["--", "../../../etc/passwd"],
 		});
-		expect(output).toContain("traversal not allowed");
+		expect(output).toContain("outside repository");
 	});
 });
 
