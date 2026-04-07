@@ -30,8 +30,9 @@ type StreamEvent =
   | Text                  // complete text block
 
   // === Tool use ===
-  | ToolUseStart          // tool call initiated, includes resolved params
+  | ToolUseStart          // tool call initiated by the model
   | ToolUseDelta          // streaming tool call argument JSON
+  | ToolUseEnd            // argument streaming complete, tool execution begins
   | ToolResult            // tool execution completed
 
   // === Context management ===
@@ -118,18 +119,24 @@ interface Text {
 
 ### Tool use
 
-Tool events carry enough context to be self-describing. The `toolCallId` ties start -> delta -> result together.
+Tool events carry enough context to be self-describing. The `toolCallId` ties start -> delta -> end -> result together.
+
+```
+ToolUseStart   → model begins requesting a tool call (name known, params incomplete)
+ToolUseDelta   → argument JSON streaming (0 or more)
+ToolUseEnd     → arguments complete, final params. Tool execution begins.
+  ... tool executing ...
+ToolResult     → execution done, here's the output.
+```
 
 ```typescript
-/** A tool call has been initiated by the model. */
+/** A tool call has been initiated by the model. Name is known, arguments not yet streamed. */
 interface ToolUseStart {
   type: "tool_use_start";
   /** Unique ID for this tool call (from the provider). */
   toolCallId: string;
   /** Tool name. */
   name: string;
-  /** Resolved parameters (may be partial if streamed; fully resolved at ToolResult). */
-  params: Record<string, unknown>;
 }
 
 /** Streaming chunk of tool call argument JSON. */
@@ -140,18 +147,25 @@ interface ToolUseDelta {
   delta: string;
 }
 
-/** Tool execution has completed. Contains the full params and result. */
+/** Model finished specifying the tool call. Arguments are fully parsed. Tool execution starts. */
+interface ToolUseEnd {
+  type: "tool_use_end";
+  toolCallId: string;
+  name: string;
+  /** Complete, parsed argument object. */
+  params: Record<string, unknown>;
+}
+
+/** Tool execution has completed. */
 interface ToolResult {
   type: "tool_result";
   toolCallId: string;
   name: string;
-  /** Final resolved parameters. */
-  params: Record<string, unknown>;
   /** Tool output (text). */
   output: string;
-  /** Whether the tool execution failed. */
+  /** Whether the tool execution threw an error. */
   isError: boolean;
-  /** How long the tool took to execute. */
+  /** How long the tool took to execute (ms). */
   durationMs: number;
 }
 ```
