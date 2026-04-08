@@ -27,6 +27,7 @@ RUN apk add --no-cache \
     coreutils \
     bubblewrap \
     bash \
+    libcap \
     libseccomp \
     && adduser -D -h /home/forge forge \
     && mkdir -p /home/forge/repos \
@@ -51,4 +52,12 @@ WORKDIR /home/forge
 
 EXPOSE 8080
 
-CMD ["bun", "run", "/app/sandbox/worker.ts"]
+# Clear ambient capabilities before starting the worker.
+# Apple Container gives non-root users full ambient caps (CapAmb: ffffffff),
+# unlike Docker with runc/gVisor which clears them. This causes bwrap to
+# refuse to run with: "Unexpected capabilities but not setuid, old file caps
+# config?"
+# capsh --inh= clears inheritable+ambient caps so bwrap uses unprivileged
+# user namespaces instead. On runtimes that don't set ambient caps, this is
+# a no-op.
+CMD ["capsh", "--shell=/usr/local/bin/bun", "--inh=", "--", "run", "/app/sandbox/worker.ts"]

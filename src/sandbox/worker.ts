@@ -68,10 +68,12 @@ async function run(
 
 	// If seccomp filter is specified, open it and pass as FD 3
 	let seccompFd: number | undefined;
-	let stdio: ["pipe", "pipe", "pipe"] | ["pipe", "pipe", "pipe", number] = ["pipe", "pipe", "pipe"];
+	// stdin is /dev/null — no spawned command needs interactive input.
+	// Using "pipe" would cause rg (and similar) to block reading stdin forever.
+	let stdio: ["ignore", "pipe", "pipe"] | ["ignore", "pipe", "pipe", number] = ["ignore", "pipe", "pipe"];
 	if (seccompFilterPath) {
 		seccompFd = openSync(seccompFilterPath, "r");
-		stdio = ["pipe", "pipe", "pipe", seccompFd];
+		stdio = ["ignore", "pipe", "pipe", seccompFd];
 	}
 
 	const proc = Bun.spawn(cmd, {
