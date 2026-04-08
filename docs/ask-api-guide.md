@@ -1,6 +1,6 @@
 # `ask()` API Usage Guide
 
-This guide walks through how to use the `ask()` API with practical examples. For type definitions and behavioral contracts, see the [API Specification](./ask-api-spec.md).
+This guide walks through how to use the `ask()` API with practical examples. For type definitions and behavioral contracts, see the [API Specification](./ask-api-redesign.md).
 
 ---
 

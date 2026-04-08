@@ -1,14 +1,14 @@
-# Proposed `ask()` API Redesign
+# `ask()` API Specification
 
-## Design Philosophy
+## 1. Overview
 
-The current API has three fundamental issues: (1) it flattens a temporal sequence into a flat struct, (2) it hides streaming behind an optional callback, and (3) it mixes response content with error strings. The redesign treats **streaming as the primary interface**, structures results as a **sequence of agent turns**, and separates errors cleanly.
+The `ask()` API treats **streaming as the primary interface**, structures results as a **sequence of agent turns**, and separates errors cleanly from response content.
 
-Every `ask()` call produces a single **agent turn**. A session's context is the ordered sequence of these turns. Streaming events are a tagged union following the pattern established by the Anthropic, OpenAI, and pi-ai APIs, adapted for a code-agent context.
+Every `ask()` call produces a single **agent turn**. A session's context is the ordered sequence of these turns. Streaming events are a tagged union adapted for a code-agent context.
 
 ---
 
-## 2. Stream Events (Tagged Union)
+## 2. Stream Events
 
 Each event is one item in the stream returned by `ask()`. Together they describe everything that happens within a single agent turn.
 
@@ -23,17 +23,17 @@ type StreamEvent =
 
   // === Content generation ===
   | ThinkingDelta
-  | Thinking              // complete thinking block for one iteration
+  | Thinking
   | ThinkingSummaryDelta
-  | ThinkingSummary       // complete thinking summary for one iteration
+  | ThinkingSummary
   | TextDelta
-  | Text                  // complete text block
+  | Text
 
   // === Tool use ===
-  | ToolUseStart          // tool call initiated by the model
-  | ToolUseDelta          // streaming tool call argument JSON
-  | ToolUseEnd            // argument streaming complete, tool execution begins
-  | ToolResult            // tool execution completed
+  | ToolUseStart
+  | ToolUseDelta
+  | ToolUseEnd
+  | ToolResult
 
   // === Context management ===
   | Compaction
@@ -42,7 +42,7 @@ type StreamEvent =
   | TurnError;
 ```
 
-### Turn lifecycle
+### 2.1 Turn Lifecycle
 
 ```typescript
 /** Emitted once at the start of a turn. */
@@ -64,7 +64,7 @@ interface TurnEnd {
 }
 ```
 
-### Iteration lifecycle
+### 2.2 Iteration Lifecycle
 
 A single agent turn may involve multiple LLM calls (iterations). The agent calls the model, the model may request tool calls, those are executed, and the model is called again. Each of these LLM calls is an **iteration**.
 
@@ -77,7 +77,7 @@ interface IterationStart {
 }
 ```
 
-### Content generation
+### 2.3 Content Generation
 
 ```typescript
 /** Streaming chunk of the model's internal reasoning. */
@@ -117,16 +117,18 @@ interface Text {
 }
 ```
 
-### Tool use
+### 2.4 Tool Use
 
-Tool events carry enough context to be self-describing. The `toolCallId` ties start -> delta -> end -> result together.
+Tool events carry enough context to be self-describing. The `toolCallId` ties the full lifecycle together.
+
+**Event sequence per tool call:**
 
 ```
-ToolUseStart   → model begins requesting a tool call (name known, params incomplete)
-ToolUseDelta   → argument JSON streaming (0 or more)
-ToolUseEnd     → arguments complete, final params. Tool execution begins.
+ToolUseStart   -> model begins requesting a tool call (name known, params incomplete)
+ToolUseDelta   -> argument JSON streaming (0 or more)
+ToolUseEnd     -> arguments complete, final params. Tool execution begins.
   ... tool executing ...
-ToolResult     → execution done, here's the output.
+ToolResult     -> execution done, here's the output.
 ```
 
 ```typescript
@@ -170,7 +172,7 @@ interface ToolResult {
 }
 ```
 
-### Context management
+### 2.5 Context Management
 
 ```typescript
 /** The session's context was compacted (older messages summarized). */
@@ -185,7 +187,7 @@ interface Compaction {
 }
 ```
 
-### Errors
+### 2.6 Errors
 
 The SDK handles retryable errors internally (rate limits, transient network failures, 503s) with backoff. Only unrecoverable errors surface to the consumer.
 
@@ -201,9 +203,9 @@ interface TurnError {
 
 ---
 
-## 3. TurnResult (Reduced Form)
+## 3. TurnResult
 
-Every `ask()` call eventually produces a `TurnResult` -- the compact, **read-only, immutable** representation of the entire turn. This is what you get when you reduce the stream.
+The compact, **read-only, immutable** representation of an entire turn. Produced by reducing the stream.
 
 ```typescript
 interface TurnResult {
@@ -243,7 +245,7 @@ interface TurnResult {
 }
 ```
 
-### Supporting types
+### 3.1 Supporting Types
 
 ```typescript
 interface ToolCall {
@@ -285,7 +287,7 @@ interface TurnMetadata {
 
 ## 4. AskStream
 
-The return type of `ask()`. It is an `AsyncIterable` of `StreamEvent` items and can also be reduced to a `TurnResult`.
+The return type of `ask()`. An `AsyncIterable<StreamEvent>` that can also be reduced to a `TurnResult`.
 
 ```typescript
 interface AskStream extends AsyncIterable<StreamEvent> {
@@ -293,46 +295,20 @@ interface AskStream extends AsyncIterable<StreamEvent> {
    * Get the reduced TurnResult. Can be called at any point -- if the stream
    * is still in progress, this awaits completion. If iteration has already
    * completed, returns the cached result immediately.
-   *
-   * If you don't need streaming, this is the simple path:
-   *   const result = await session.ask("question").result();
    */
   result(): Promise<TurnResult>;
 }
 ```
 
-**Two usage patterns:**
+**Behavioral contract:**
 
-```typescript
-// Pattern 1: Streaming (primary)
-const stream = session.ask("Explain the auth module");
-for await (const event of stream) {
-  switch (event.type) {
-    case "text_delta":
-      process.stdout.write(event.delta);
-      break;
-    case "tool_use_start":
-      console.log(`Calling ${event.name}...`);
-      break;
-    case "tool_result":
-      console.log(`${event.name} completed in ${event.durationMs}ms`);
-      break;
-    case "error":
-      console.error(`[${event.source}] ${event.message}`);
-      break;
-  }
-}
-const result = await stream.result();
-console.log(`Done. Used ${result.usage.totalTokens} tokens.`);
-
-// Pattern 2: Simple (non-streaming)
-const result = await session.ask("Explain the auth module").result();
-console.log(result.text);
-```
+- `ask()` returns `AskStream` synchronously. The stream begins producing events when consumed (iterated or `.result()` awaited).
+- Iterating the stream and calling `.result()` can be combined: iterate for live events, then call `.result()` for the final reduced form.
+- `.result()` is idempotent. Calling it multiple times returns the same cached `TurnResult`.
 
 ---
 
-## 5. Session API
+## 5. Session
 
 ```typescript
 class Session {
@@ -375,9 +351,7 @@ class Session {
 }
 ```
 
-### AskOptions
-
-These are actual configuration options, not a callback.
+### 5.1 AskOptions
 
 ```typescript
 interface AskOptions {
@@ -415,63 +389,13 @@ interface AskOptions {
 }
 ```
 
-### Open Decision: Mutable session config vs. per-turn overrides
-
-> **Decision needed.** Should session configuration be mutable mid-session (`updateConfig()`), or should all overrides be per-turn via `AskOptions`?
-
-**Option A: Mutable session config.** Add `getConfig()` and `updateConfig(patch)` to Session. Changes apply to all subsequent `ask()` calls. This raises two sub-questions:
-
-> **Decision 2: Concurrency semantics.** `ask()` is async. If `updateConfig()` is called while a turn is in-flight, does the in-flight turn use the old or new config?
->
-> ```typescript
-> const stream = session.ask("Explain auth");
-> session.updateConfig({ maxIterations: 5 }); // during in-flight turn
-> ```
->
-> Options: (a) snapshot config at `ask()` call time so in-flight turns are never affected, (b) lazily read config per-iteration so changes take effect mid-turn. Either is defensible; both are surprising to someone. Snapshotting is safer but means `updateConfig()` has no effect on work already started.
-
-> **Decision 5: Partial update semantics.** What does `undefined` mean in a partial update?
->
-> ```typescript
-> session.updateConfig({ thinking: undefined });
-> ```
->
-> Does this mean "turn thinking off" or "don't change thinking"? With `Partial<>`, both interpretations are valid. Options: (a) `undefined` = no change, require explicit `null` to clear, (b) `undefined` = clear/unset, require omitting the key for no change (impossible to distinguish at runtime). This adds API surface and documentation burden either way.
-
-```typescript
-// Option A interface additions on Session:
-getConfig(): Readonly<MutableSessionConfig>;
-updateConfig(patch: Partial<MutableSessionConfig>): void;
-
-interface MutableSessionConfig {
-  systemPrompt: string;
-  maxIterations: number;
-  thinking?: ThinkingConfig;
-  compaction?: Partial<CompactionSettings>;
-}
-```
-
-**Option B: Per-turn overrides only (recommended).** No `updateConfig()`. Session config is immutable after construction. Per-turn overrides go in `AskOptions`:
-
-```typescript
-// Session config is the baseline, AskOptions overrides for one turn
-session.ask("Quick summary", {
-  maxIterations: 5,
-  thinking: { effort: "low" },
-});
-```
-
-This eliminates both decisions above. Config is always deterministic: `sessionBaseline + perCallOverrides`. No temporal ordering issues, no concurrency edge cases, no partial update ambiguity. The tradeoff: you can't "change the default for all future turns" without repeating yourself, but that's a convenience gained at the cost of hidden temporal state -- exactly what this redesign is trying to eliminate.
-
-Additional consideration for Option A: mutating `systemPrompt` mid-session means the model was "one person" for turns 0-3 and "a different person" for turns 4+. The model sees its own prior responses (from the old prompt) but now has new instructions. Compaction is worse -- if a summary was generated under prompt A and you're now operating under prompt B, the summary may be subtly wrong.
-
 ---
 
-## 6. Client Configuration & Transport
+## 6. Client Configuration
 
-### ClientConfig
+### 6.1 ClientConfig
 
-**No hardcoded defaults.** Provider and model are required.
+No hardcoded defaults. Provider and model are required.
 
 ```typescript
 interface ClientConfig {
@@ -498,7 +422,7 @@ interface ClientConfig {
 }
 ```
 
-### TransportConfig
+### 6.2 TransportConfig
 
 The transport abstraction decouples "how we talk to the LLM" from session logic. The default SSE transport wraps pi-ai's `stream()`. Custom transports enable testing, proxying, alternative protocols, and future websocket support.
 
@@ -535,18 +459,19 @@ interface ProviderStream {
 
 ## 7. Error Handling
 
-Two categories:
+### 7.1 Error Categories
 
 | Error Type | Where it appears | Example |
 |---|---|---|
 | **Programming error** | Synchronous throw from `ask()` | Session closed, invalid turn ID |
 | **Runtime error** | `StreamEvent` of type `"error"`, also in `TurnResult.error` | API key invalid, max iterations reached, unrecoverable tool failure |
 
-The SDK handles retryable errors internally (rate limits, transient 503s, network failures) with backoff. Only unrecoverable errors surface to the consumer.
+### 7.2 Behavioral Contract
 
-Tool execution failures are fed back to the model (which can retry or work around them). These do NOT set `TurnResult.error`.
-
-The `response` field is **never** overloaded with error messages. `TurnResult.text` is always the model's actual text output. `TurnResult.error` is always the error (or null).
+- The SDK handles retryable errors internally (rate limits, transient 503s, network failures) with backoff. Only unrecoverable errors surface to the consumer.
+- Tool execution failures are fed back to the model (which can retry or work around them). These do **not** set `TurnResult.error`.
+- `TurnResult.text` is **always** the model's actual text output. It is never overloaded with error messages.
+- `TurnResult.error` is **always** the error (or null).
 
 ---
 
@@ -571,97 +496,47 @@ Session
         +-- ...
 ```
 
-- `session.getTurns()` returns `[Turn 0, Turn 1, Turn 2]` (all turns, including branches).
-- Internally, when `afterTurn: "t-abc"` is used, the library reconstructs messages from turns 0 only (not 1), then adds the new prompt. The model doesn't see turn 1's context.
-- The turn sequence is append-only and immutable. No turn is ever modified or deleted.
+### 8.1 Invariants
+
+- `session.getTurns()` returns all turns in creation order, including branches.
+- When `afterTurn` is used, the library reconstructs messages from the start through the specified turn only, then appends the new prompt. The model does not see turns after the branch point.
+- The turn sequence is **append-only and immutable**. No turn is ever modified or deleted.
+- Concurrent `ask()` calls are serialized -- the second stream won't produce events until the first completes.
 
 ---
 
-## 9. Full Usage Example
+## 9. Open Decisions
+
+### 9.1 Mutable Session Config vs. Per-Turn Overrides
+
+**Decision needed.** Should session configuration be mutable mid-session (`updateConfig()`), or should all overrides be per-turn via `AskOptions`?
+
+**Option A: Mutable session config.** Add `getConfig()` and `updateConfig(patch)` to Session. Changes apply to all subsequent `ask()` calls.
 
 ```typescript
-import { AskForgeClient } from "askforge";
+// Option A interface additions on Session:
+getConfig(): Readonly<MutableSessionConfig>;
+updateConfig(patch: Partial<MutableSessionConfig>): void;
 
-// No hidden defaults -- everything explicit
-const client = new AskForgeClient({
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
-  maxIterations: 15,
-  thinking: { type: "adaptive", effort: "high" },
-  compaction: { enabled: true, contextWindow: 200_000 },
-});
-
-const session = await client.connect("https://github.com/owner/repo", {
-  token: process.env.GITHUB_TOKEN,
-});
-
-// --- Turn 1: streaming ---
-const stream = session.ask("What are the main API endpoints?");
-for await (const event of stream) {
-  switch (event.type) {
-    case "turn_start":
-      console.log(`Turn ${event.turnId} started`);
-      break;
-    case "iteration_start":
-      console.log(`  Iteration ${event.index}`);
-      break;
-    case "thinking_delta":
-      // show thinking in a debug panel
-      break;
-    case "text_delta":
-      process.stdout.write(event.delta);
-      break;
-    case "tool_use_start":
-      console.log(`  -> ${event.name}(${JSON.stringify(event.params)})`);
-      break;
-    case "tool_result":
-      console.log(`  <- ${event.name}: ${event.durationMs}ms ${event.isError ? "FAILED" : "ok"}`);
-      break;
-    case "compaction":
-      console.log(`  Context compacted: ${event.tokensBefore} -> ${event.tokensAfter} tokens`);
-      break;
-    case "error":
-      console.error(`  [${event.source}] ${event.message}`);
-      break;
-    case "turn_end":
-      console.log(`  Done: ${event.metadata.iterations} iterations, ` +
-                   `${event.metadata.usage.totalTokens} tokens, ` +
-                   `${event.metadata.latencyMs}ms`);
-      break;
-  }
+interface MutableSessionConfig {
+  systemPrompt: string;
+  maxIterations: number;
+  thinking?: ThinkingConfig;
+  compaction?: Partial<CompactionSettings>;
 }
-const turn1 = await stream.result();
-
-// --- Turn 2: simple (non-streaming) ---
-const turn2 = await session.ask("How is auth handled?").result();
-console.log(turn2.text);
-console.log(`Tools used: ${turn2.toolCalls.map(t => t.name).join(", ")}`);
-
-// --- Turn 3: branch from turn 1, ignoring turn 2 ---
-const turn3 = await session.ask("Now explain the database layer", {
-  afterTurn: turn1.id,
-}).result();
-
-// --- Inspect session context ---
-const turns = session.getTurns();
-console.log(`Session has ${turns.length} turns`);
-for (const t of turns) {
-  console.log(`  [${t.id}] "${t.prompt}" -> ${t.toolCalls.length} tool calls`);
-}
-
-// --- Per-turn config override (no session mutation needed) ---
-const turn4 = await session.ask("Quick summary?", {
-  model: { provider: "anthropic", id: "claude-haiku-4-5" },
-  maxIterations: 5,
-  thinking: { effort: "low" },
-}).result();
-
-await session.close();
 ```
+
+Sub-decisions required:
+
+- **Concurrency semantics:** If `updateConfig()` is called while a turn is in-flight, does the in-flight turn use the old or new config? Snapshotting at `ask()` call time is safer but means `updateConfig()` has no effect on work already started.
+- **Partial update semantics:** Does `undefined` in a partial update mean "no change" or "clear/unset"? Both interpretations are valid with `Partial<>`.
+- **System prompt mutation:** Mutating `systemPrompt` mid-session means the model was "one person" for earlier turns and "a different person" for later turns. Compaction summaries generated under an old prompt may be subtly wrong under a new one.
+
+**Option B: Per-turn overrides only (recommended).** No `updateConfig()`. Session config is immutable after construction. Per-turn overrides go in `AskOptions`. This eliminates all sub-decisions above. Config is always deterministic: `sessionBaseline + perCallOverrides`.
 
 ---
 
-## 10. What Changes from Current API
+## 10. Migration from Current API
 
 | Current | Proposed | Why |
 |---|---|---|
@@ -669,10 +544,10 @@ await session.close();
 | `AskOptions.onProgress` callback | Iterate `AskStream` directly | Streaming is the primary interface, not an afterthought |
 | `AskResult.response` contains text OR error string | `TurnResult.text` is always text; `.error` is always the error (or null) | Unambiguous |
 | Flat `AskResult` with `inferenceTimeMs`, `totalLinks`, etc. | `TurnResult.metadata` with structured sub-objects | Organized, extensible |
-| `getMessages()` / `replaceMessages()` exposes raw pi-ai messages | `getTurns()` / `getTurn(id)` exposes agent turns | Observable, structured, not "magical" internal state |
+| `getMessages()` / `replaceMessages()` exposes raw pi-ai messages | `getTurns()` / `getTurn(id)` exposes agent turns | Observable, structured |
 | `ClientConfig.provider` and `model` optional with hardcoded defaults | Both required | No hidden defaults |
 | `ClientConfig.compaction` defaults to enabled | Must be explicitly configured | No hidden defaults |
 | No turn IDs, no branching | `afterTurn` option with explicit IDs | Clear continuation model |
-| No mid-session config changes | Per-turn overrides in `AskOptions` for model, maxIterations, thinking (or mutable config -- [open decision](#open-decision-mutable-session-config-vs-per-turn-overrides)) | Adjustable without hidden temporal state |
+| No mid-session config changes | Per-turn overrides in `AskOptions` | Adjustable without hidden temporal state |
 | No transport abstraction | `TransportConfig` with SSE default and custom factory | Extensible, testable |
-| Errors mixed into response string | Separate `.error` field; retryable errors handled internally by SDK | Clean separation, no consumer retry logic needed |
+| Errors mixed into response string | Separate `.error` field; retryable errors handled internally | Clean separation |
