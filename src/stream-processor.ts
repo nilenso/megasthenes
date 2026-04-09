@@ -298,7 +298,12 @@ export function processStreamToEvents(
 								toolCallNames.set(parsed.contentIndex, parsed.name);
 								yield { type: "tool_use_start", toolCallId: String(parsed.contentIndex), name: parsed.name };
 							}
-							yield { type: "tool_use_delta", toolCallId: String(parsed.contentIndex), name: parsed.name, delta: parsed.delta };
+							yield {
+								type: "tool_use_delta",
+								toolCallId: String(parsed.contentIndex),
+								name: parsed.name,
+								delta: parsed.delta,
+							};
 						}
 						break;
 					}

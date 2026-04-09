@@ -436,7 +436,12 @@ describe("processStreamToEvents", () => {
 					type: "toolcall_delta",
 					delta: "{}",
 					contentIndex: 0,
-					partial: { content: [{ type: "toolCall", name: "rg" }, { type: "toolCall", name: "fd" }] },
+					partial: {
+						content: [
+							{ type: "toolCall", name: "rg" },
+							{ type: "toolCall", name: "fd" },
+						],
+					},
 				},
 				{
 					type: "toolcall_end",
@@ -447,7 +452,12 @@ describe("processStreamToEvents", () => {
 					type: "toolcall_delta",
 					delta: "{}",
 					contentIndex: 1,
-					partial: { content: [{ type: "toolCall", name: "rg" }, { type: "toolCall", name: "fd" }] },
+					partial: {
+						content: [
+							{ type: "toolCall", name: "rg" },
+							{ type: "toolCall", name: "fd" },
+						],
+					},
 				},
 				{
 					type: "toolcall_end",

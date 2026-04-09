@@ -154,18 +154,26 @@ export type StreamEvent =
 	| TurnError;
 
 // =============================================================================
-// TurnResult
+// Steps & TurnResult
 // =============================================================================
 
-/** A single tool call with its result. */
-export interface ToolCall {
-	readonly id: string;
-	readonly name: string;
-	readonly params: Record<string, unknown>;
-	readonly output: string;
-	readonly isError: boolean;
-	readonly durationMs: number;
-}
+/** A single step in the agent's turn. Steps are the ordered record of everything the agent did. */
+export type Step =
+	| { type: "thinking"; text: string }
+	| { type: "thinking_summary"; text: string }
+	| { type: "text"; text: string; role: "assistant" }
+	| {
+			type: "tool_call";
+			id: string;
+			name: string;
+			params: Record<string, unknown>;
+			output: string;
+			isError: boolean;
+			durationMs: number;
+	  }
+	| { type: "iteration_start"; index: number }
+	| { type: "compaction"; summary: string; tokensBefore: number; tokensAfter: number }
+	| { type: "error"; source: "provider" | "library"; message: string; details?: unknown; recoverable: boolean };
 
 /** Token usage totals across all iterations in a turn. */
 export interface TokenUsage {
@@ -194,8 +202,6 @@ export interface TurnMetadata {
 	model: ModelConfig;
 	/** Thinking effort level the model used (undefined if thinking off). */
 	thinkingEffort?: string;
-	/** Link validation on the response text. */
-	links: { total: number; invalid: { url: string; repoPath: string }[] };
 	/** Repo state at the time of the turn. */
 	repo: { url: string; commitish: string };
 	/** Session-level config snapshot for this turn. */
@@ -208,19 +214,13 @@ export interface TurnResult {
 	readonly id: string;
 	/** The prompt that initiated this turn. */
 	readonly prompt: string;
-	/** Final assembled response text. Empty string if the turn ended in error before producing text. */
-	readonly text: string;
-	/** Concatenated thinking trace across all iterations. null if thinking was off. */
-	readonly thinking: string | null;
-	/** Concatenated thinking summary across all iterations. null if not available. */
-	readonly thinkingSummary: string | null;
-	/** All tool calls made during this turn, in execution order, with results. */
-	readonly toolCalls: readonly ToolCall[];
-	/** Token usage totals across all iterations in this turn. */
+	/** Ordered sequence of everything the agent did in this turn. */
+	readonly steps: readonly Step[];
+	/** Token usage totals across all iterations. */
 	readonly usage: TokenUsage;
 	/** End-of-turn metadata. */
 	readonly metadata: TurnMetadata;
-	/** Non-null if the turn ended in error. */
+	/** Non-null if the turn ended in an unrecoverable error. */
 	readonly error: { message: string; details?: unknown } | null;
 	/** Epoch ms when this turn started. */
 	readonly startedAt: number;

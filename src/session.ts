@@ -16,7 +16,6 @@ import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { type ParsedLink, validateLinks } from "./response-validation";
 import { processStream, type StreamFn } from "./stream-processor";
-import { validateRequiredTools } from "./tools";
 import {
 	endAskSpan,
 	endAskSpanWithError,

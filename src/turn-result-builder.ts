@@ -3,36 +3,24 @@
  *
  * This is a stateful accumulator: feed it events via process(), then
  * call build() to get the final immutable TurnResult.
+ *
+ * The builder accumulates Steps — the ordered record of everything the
+ * agent did during the turn.
  */
 
-import type {
-	StreamEvent,
-	TokenUsage,
-	ToolCall,
-	TurnMetadata,
-	TurnResult,
-} from "./types";
+import type { Step, StreamEvent, TokenUsage, TurnMetadata, TurnResult } from "./types";
 
 /** Mutable state for a tool call being assembled from stream events. */
 interface PendingToolCall {
 	id: string;
 	name: string;
 	params: Record<string, unknown>;
-	output: string;
-	isError: boolean;
-	durationMs: number;
-	complete: boolean;
 }
 
 export class TurnResultBuilder {
 	#id = "";
 	#prompt = "";
-	#textParts: string[] = [];
-	#thinkingParts: string[] = [];
-	#thinkingSummaryParts: string[] = [];
-	#hasThinking = false;
-	#hasThinkingSummary = false;
-	#toolCalls: PendingToolCall[] = [];
+	#steps: Step[] = [];
 	#pendingTools = new Map<string, PendingToolCall>();
 	#usage: TokenUsage = {
 		inputTokens: 0,
@@ -60,50 +48,36 @@ export class TurnResultBuilder {
 				this.#metadata = event.metadata;
 				break;
 
-			case "thinking_delta":
-				this.#hasThinking = true;
-				this.#thinkingParts.push(event.delta);
-				break;
+			// --- Content completion events become steps ---
 
 			case "thinking":
-				this.#hasThinking = true;
-				// The complete text replaces any accumulated deltas for this block
-				// (deltas already captured the same content incrementally)
-				break;
-
-			case "thinking_summary_delta":
-				this.#hasThinkingSummary = true;
-				this.#thinkingSummaryParts.push(event.delta);
+				this.#steps.push({ type: "thinking", text: event.text });
 				break;
 
 			case "thinking_summary":
-				this.#hasThinkingSummary = true;
-				break;
-
-			case "text_delta":
-				this.#textParts.push(event.delta);
+				this.#steps.push({ type: "thinking_summary", text: event.text });
 				break;
 
 			case "text":
-				// Complete text block — deltas already accumulated the content
+				this.#steps.push({ type: "text", text: event.text, role: "assistant" });
 				break;
 
-			case "tool_use_start": {
-				const pending: PendingToolCall = {
+			// --- Streaming deltas are not steps (they're intermediate) ---
+
+			case "thinking_delta":
+			case "thinking_summary_delta":
+			case "text_delta":
+			case "tool_use_delta":
+				break;
+
+			// --- Tool lifecycle ---
+
+			case "tool_use_start":
+				this.#pendingTools.set(event.toolCallId, {
 					id: event.toolCallId,
 					name: event.name,
 					params: {},
-					output: "",
-					isError: false,
-					durationMs: 0,
-					complete: false,
-				};
-				this.#pendingTools.set(event.toolCallId, pending);
-				break;
-			}
-
-			case "tool_use_delta":
-				// Argument streaming — not needed for the reduced result
+				});
 				break;
 
 			case "tool_use_end": {
@@ -116,36 +90,54 @@ export class TurnResultBuilder {
 
 			case "tool_result": {
 				const pending = this.#pendingTools.get(event.toolCallId);
-				if (pending) {
-					pending.output = event.output;
-					pending.isError = event.isError;
-					pending.durationMs = event.durationMs;
-					pending.complete = true;
-					this.#toolCalls.push(pending);
-					this.#pendingTools.delete(event.toolCallId);
-				} else {
-					// tool_result without a prior tool_use_start — create a standalone record
-					this.#toolCalls.push({
-						id: event.toolCallId,
-						name: event.name,
-						params: {},
-						output: event.output,
-						isError: event.isError,
-						durationMs: event.durationMs,
-						complete: true,
-					});
-				}
+				this.#steps.push({
+					type: "tool_call",
+					id: pending?.id ?? event.toolCallId,
+					name: event.name,
+					params: pending?.params ?? {},
+					output: event.output,
+					isError: event.isError,
+					durationMs: event.durationMs,
+				});
+				if (pending) this.#pendingTools.delete(event.toolCallId);
 				break;
 			}
 
+			// --- Context management ---
+
 			case "compaction":
-				// Compaction is informational — no fields on TurnResult
+				this.#steps.push({
+					type: "compaction",
+					summary: event.summary,
+					tokensBefore: event.tokensBefore,
+					tokensAfter: event.tokensAfter,
+				});
 				break;
+
+			// --- Errors ---
 
 			case "error":
 				this.#error = { message: event.message, details: event.details };
+				this.#steps.push({
+					type: "error",
+					source: "provider",
+					message: event.message,
+					details: event.details,
+					recoverable: false,
+				});
 				break;
 		}
+	}
+
+	/** Add an iteration_start step (called by the session layer). */
+	addIterationStart(index: number): void {
+		this.#steps.push({ type: "iteration_start", index });
+	}
+
+	/** Set the turn error (called by the session layer). */
+	setError(message: string, details?: unknown): void {
+		this.#error = { message, details };
+		this.#steps.push({ type: "error", source: "library", message, details, recoverable: false });
 	}
 
 	/** Accumulate token usage (called by the session layer after each iteration). */
@@ -161,20 +153,10 @@ export class TurnResultBuilder {
 
 	/** Build the final immutable TurnResult. */
 	build(): TurnResult {
-		const completedToolCalls: ToolCall[] = this.#toolCalls.map((tc) => ({
-			id: tc.id,
-			name: tc.name,
-			params: tc.params,
-			output: tc.output,
-			isError: tc.isError,
-			durationMs: tc.durationMs,
-		}));
-
 		const defaultMetadata: TurnMetadata = {
 			iterations: 0,
 			latencyMs: this.#endedAt > 0 ? this.#endedAt - this.#startedAt : 0,
 			model: { provider: "", id: "" },
-			links: { total: 0, invalid: [] },
 			repo: { url: "", commitish: "" },
 			config: { maxIterations: 0 },
 		};
@@ -182,10 +164,7 @@ export class TurnResultBuilder {
 		return {
 			id: this.#id,
 			prompt: this.#prompt,
-			text: this.#textParts.join(""),
-			thinking: this.#hasThinking ? this.#thinkingParts.join("") : null,
-			thinkingSummary: this.#hasThinkingSummary ? this.#thinkingSummaryParts.join("") : null,
-			toolCalls: completedToolCalls,
+			steps: [...this.#steps],
 			usage: { ...this.#usage },
 			metadata: this.#metadata ?? defaultMetadata,
 			error: this.#error,
