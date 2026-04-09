@@ -15,12 +15,23 @@ import {
 	type ToolCallRecord,
 } from "./session";
 import { executeTool, tools } from "./tools";
+import type {
+	AskStream,
+	ModelConfig,
+	NewAskOptions,
+	Step,
+	StreamEvent,
+	TokenUsage,
+	TurnMetadata,
+	TurnResult,
+} from "./types";
 
 // Re-export all public types and loggers
 export type {
 	AskError,
 	AskOptions,
 	AskResult,
+	AskStream,
 	CompactionSettings,
 	ConnectOptions,
 	Forge,
@@ -29,13 +40,20 @@ export type {
 	KnownProvider,
 	Logger,
 	Message,
+	ModelConfig,
+	NewAskOptions,
 	OnProgress,
 	ProgressEvent,
 	Repo,
 	SandboxClientConfig,
 	Session,
+	Step,
+	StreamEvent,
 	ThinkingConfig,
+	TokenUsage,
 	ToolCallRecord,
+	TurnMetadata,
+	TurnResult,
 };
 export { buildDefaultSystemPrompt, consoleLogger, nullLogger };
 

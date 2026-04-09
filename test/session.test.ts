@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { Repo } from "../src/forge";
 import { type Logger, nullLogger } from "../src/logger";
 import { type Message, Session, type SessionConfig } from "../src/session";
-import { overrideToolAvailability } from "../src/tools";
 
 // Mock repo for testing
 function createMockRepo(): Repo {
@@ -549,7 +548,7 @@ describe("Session", () => {
 			const result = await session.ask("Find files");
 			expect(result.toolCalls).toHaveLength(2);
 
-			const tc0 = result.toolCalls[0]!;
+			const tc0 = result.toolCalls[0] as (typeof result.toolCalls)[0];
 			expect(tc0.id).toBe("tc0");
 			expect(tc0.name).toBe("rg");
 			expect(tc0.arguments).toEqual({ pattern: "foo" });
@@ -558,7 +557,7 @@ describe("Session", () => {
 			expect(typeof tc0.durationMs).toBe("number");
 			expect(tc0.durationMs).toBeGreaterThanOrEqual(0);
 
-			const tc1 = result.toolCalls[1]!;
+			const tc1 = result.toolCalls[1] as (typeof result.toolCalls)[0];
 			expect(tc1.id).toBe("tc1");
 			expect(tc1.name).toBe("fd");
 			expect(tc1.isError).toBe(false);
@@ -587,7 +586,7 @@ describe("Session", () => {
 			const result = await session.ask("Search");
 			expect(result.toolCalls).toHaveLength(1);
 
-			const tc = result.toolCalls[0]!;
+			const tc = result.toolCalls[0] as (typeof result.toolCalls)[0];
 			expect(tc.id).toBe("tc0");
 			expect(tc.name).toBe("rg");
 			expect(tc.isError).toBe(true);
@@ -656,7 +655,7 @@ describe("Session", () => {
 			const result = await session.ask("Do something");
 			expect(result.response).toContain("Max iterations reached");
 			expect(result.error).not.toBeNull();
-			expect(result.error!.message).toContain("Max iterations reached");
+			expect(result.error?.message).toContain("Max iterations reached");
 		});
 
 		test("unknown tool call flows back as error and model can respond", async () => {
