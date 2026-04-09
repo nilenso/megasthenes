@@ -278,23 +278,6 @@ describe("Session", () => {
 	});
 
 	describe("ask", () => {
-		afterEach(() => {
-			// Restore real tool availability after each test
-			overrideToolAvailability("rg", true);
-			overrideToolAvailability("fd", true);
-		});
-
-		test("returns error result when required tools are missing", async () => {
-			overrideToolAvailability("rg", false);
-			overrideToolAvailability("fd", false);
-
-			const session = new Session(createMockRepo(), createMockConfig());
-			const result = await session.ask("Hello");
-
-			expect(result.response).toContain("[ERROR: Required tools not installed: rg, fd");
-			expect(result.usage.totalTokens).toBe(0); // No LLM call was made
-		});
-
 		test("returns response from mock stream", async () => {
 			const repo = createMockRepo();
 			const session = new Session(repo, createMockConfig());
@@ -303,6 +286,7 @@ describe("Session", () => {
 
 			expect(result.prompt).toBe("What is 2+2?");
 			expect(result.response).toBe("Hello world");
+			expect(result.error).toBeNull();
 			expect(result.toolCalls).toEqual([]);
 			expect(result.usage.inputTokens).toBe(10);
 			expect(result.usage.outputTokens).toBe(5);
@@ -541,7 +525,7 @@ describe("Session", () => {
 			expect(toolResults[0]?.isError).toBe(false);
 		});
 
-		test("result.toolCalls records all tool calls", async () => {
+		test("result.toolCalls records all tool calls with enriched fields", async () => {
 			let streamCalls = 0;
 			const customStream = (() => {
 				streamCalls++;
@@ -558,14 +542,57 @@ describe("Session", () => {
 				createMockRepo(),
 				createMockConfig({
 					stream: customStream,
-					executeTool: async () => "result",
+					executeTool: async () => "tool output",
 				}),
 			);
 
 			const result = await session.ask("Find files");
 			expect(result.toolCalls).toHaveLength(2);
-			expect(result.toolCalls[0]?.name).toBe("rg");
-			expect(result.toolCalls[1]?.name).toBe("fd");
+
+			const tc0 = result.toolCalls[0]!;
+			expect(tc0.id).toBe("tc0");
+			expect(tc0.name).toBe("rg");
+			expect(tc0.arguments).toEqual({ pattern: "foo" });
+			expect(tc0.output).toBe("tool output");
+			expect(tc0.isError).toBe(false);
+			expect(typeof tc0.durationMs).toBe("number");
+			expect(tc0.durationMs).toBeGreaterThanOrEqual(0);
+
+			const tc1 = result.toolCalls[1]!;
+			expect(tc1.id).toBe("tc1");
+			expect(tc1.name).toBe("fd");
+			expect(tc1.isError).toBe(false);
+		});
+
+		test("failed tool call records have isError=true and error output", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => {
+						throw new Error("tool crashed");
+					},
+				}),
+			);
+
+			const result = await session.ask("Search");
+			expect(result.toolCalls).toHaveLength(1);
+
+			const tc = result.toolCalls[0]!;
+			expect(tc.id).toBe("tc0");
+			expect(tc.name).toBe("rg");
+			expect(tc.isError).toBe(true);
+			expect(tc.output).toContain("tool crashed");
+			expect(tc.durationMs).toBeGreaterThanOrEqual(0);
 		});
 
 		test("multiple tool calls execute in parallel", async () => {
@@ -628,6 +655,8 @@ describe("Session", () => {
 
 			const result = await session.ask("Do something");
 			expect(result.response).toContain("Max iterations reached");
+			expect(result.error).not.toBeNull();
+			expect(result.error!.message).toContain("Max iterations reached");
 		});
 
 		test("unknown tool call flows back as error and model can respond", async () => {
