@@ -10,12 +10,13 @@ import {
 	type Tool,
 } from "@mariozechner/pi-ai";
 import type { Span } from "@opentelemetry/api";
+import { AskStreamImpl } from "./ask-stream";
 import { type CompactionSettings, maybeCompact } from "./compaction";
 import type { ThinkingConfig } from "./config";
 import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { type ParsedLink, validateLinks } from "./response-validation";
-import { processStream, type StreamFn } from "./stream-processor";
+import { processStream, processStreamToEvents, type StreamFn } from "./stream-processor";
 import {
 	endAskSpan,
 	endAskSpanWithError,
@@ -30,6 +31,7 @@ import {
 	startGenerationSpan,
 	startToolSpan,
 } from "./tracing";
+import type { AskStream, NewAskOptions, StreamEvent, TurnMetadata } from "./types";
 
 // =============================================================================
 // Types
@@ -273,6 +275,7 @@ export class Session {
 	#streamSimple: StreamFn;
 	#context: Context;
 	#pending: Promise<AskResult> | null = null;
+	#streamPending: Promise<unknown> = Promise.resolve();
 	#closed = false;
 	#compactionSummary: string | undefined = undefined;
 
@@ -343,6 +346,31 @@ export class Session {
 	}
 
 	/**
+	 * Ask a question and get a streaming response (new API).
+	 *
+	 * Returns an AskStream synchronously. The stream starts producing events
+	 * when consumed (iterated or .result() awaited).
+	 * Concurrent calls are serialized — the second stream won't produce
+	 * events until the first completes.
+	 *
+	 * @throws Error (synchronous) if the session is closed
+	 */
+	askStream(prompt: string, _options?: NewAskOptions): AskStream {
+		if (this.#closed) {
+			throw new Error(`Session ${this.id} is closed`);
+		}
+
+		// Capture the current pending promise for serialization
+		const prevPending = this.#streamPending;
+		// Create a deferred that we resolve when the stream completes
+		let resolveStreamDone: () => void = () => {};
+		this.#streamPending = new Promise<void>((resolve) => {
+			resolveStreamDone = resolve;
+		});
+		return new AskStreamImpl(() => this.#doAskStream(prompt, prevPending, resolveStreamDone));
+	}
+
+	/**
 	 * Get all messages in the conversation history.
 	 * Includes user messages, assistant responses, and tool results.
 	 */
@@ -375,6 +403,156 @@ export class Session {
 		const success = await cleanupWorktree(this.repo);
 		if (!success) {
 			this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
+		}
+	}
+
+	async *#doAskStream(prompt: string, prevPending: Promise<unknown>, onDone: () => void): AsyncGenerator<StreamEvent> {
+		try {
+			// Serialize with any previous askStream call
+			await prevPending;
+
+			const turnId = randomUUID();
+			const startedAt = Date.now();
+			yield { type: "turn_start", turnId, prompt, timestamp: startedAt };
+
+			// Compaction
+			const newQuestionMessage: Message = { role: "user", content: prompt, timestamp: Date.now() };
+			const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
+
+			try {
+				const compactionResult = await maybeCompact(this.#config.model, messagesWithQuestion, this.#compactionSummary);
+				if (compactionResult.wasCompacted) {
+					this.#context.messages = compactionResult.messages;
+					this.#compactionSummary = compactionResult.summary;
+					yield {
+						type: "compaction",
+						summary: compactionResult.summary ?? "",
+						firstKeptOrdinal: compactionResult.firstKeptOrdinal,
+						tokensBefore: compactionResult.tokensBefore,
+						tokensAfter: compactionResult.tokensAfter,
+						readFiles: compactionResult.readFiles,
+						modifiedFiles: compactionResult.modifiedFiles,
+					};
+				} else {
+					this.#context.messages.push(newQuestionMessage);
+				}
+			} catch {
+				this.#context.messages.push(newQuestionMessage);
+			}
+
+			const maxIterations = this.#config.maxIterations;
+			let iterations = 0;
+
+			for (let iteration = 0; iteration < maxIterations; iteration++) {
+				iterations = iteration + 1;
+
+				const { streamFn, streamOptions } = this.#resolveStreamCall();
+				const { events, response: getResponse } = processStreamToEvents(
+					streamFn,
+					this.#config.model,
+					this.#context,
+					streamOptions,
+				);
+
+				// Yield all events from this iteration's LLM call
+				let hadError = false;
+				for await (const event of events) {
+					if (event.type === "error") {
+						hadError = true;
+						yield event;
+						// Error terminates the turn
+						yield {
+							type: "turn_end",
+							turnId,
+							metadata: this.#buildTurnMetadata(iterations, startedAt),
+						};
+						return;
+					}
+					yield event;
+				}
+
+				if (hadError) return;
+
+				// Get the final response message
+				const response = await getResponse();
+				this.#context.messages.push(response);
+
+				// Check if we have tool calls
+				const responseToolCalls = response.content.filter(
+					(b): b is { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> } =>
+						b.type === "toolCall",
+				);
+
+				if (responseToolCalls.length === 0) {
+					// Final text response — turn is done
+					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+					return;
+				}
+
+				// Execute tool calls and yield results
+				yield* this.#executeToolCallsStream(responseToolCalls);
+			}
+
+			// Max iterations reached
+			yield { type: "error", message: "Max iterations reached without a final answer." };
+			yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+		} finally {
+			onDone();
+		}
+	}
+
+	#buildTurnMetadata(iterations: number, startedAt: number): TurnMetadata {
+		return {
+			iterations,
+			latencyMs: Date.now() - startedAt,
+			model: { provider: String(this.#config.model.provider), id: String(this.#config.model.id) },
+			repo: { url: this.repo.url, commitish: this.repo.commitish },
+			config: {
+				maxIterations: this.#config.maxIterations,
+				thinkingConfig: this.#config.thinking,
+			},
+		};
+	}
+
+	async *#executeToolCallsStream(
+		toolCalls: { id: string; name: string; arguments: Record<string, unknown> }[],
+	): AsyncGenerator<StreamEvent> {
+		const results = await Promise.all(
+			toolCalls.map(async (call) => {
+				const t0 = Date.now();
+				try {
+					const result = await this.#config.executeTool(call.name, call.arguments, this.repo.localPath);
+					return { text: result, isError: false, durationMs: Date.now() - t0 };
+				} catch (error) {
+					const errorText = formatToolExecutionError(call.name, error);
+					return { text: errorText, isError: true, durationMs: Date.now() - t0 };
+				}
+			}),
+		);
+
+		for (let j = 0; j < toolCalls.length; j++) {
+			const call = toolCalls[j];
+			const r = results[j];
+			if (!call || !r) continue;
+
+			// Push tool result into context for next iteration
+			this.#context.messages.push({
+				role: "toolResult",
+				toolCallId: call.id,
+				toolName: call.name,
+				content: [{ type: "text", text: r.text }],
+				isError: r.isError,
+				timestamp: Date.now(),
+			});
+
+			yield {
+				type: "tool_result",
+				toolCallId: call.id,
+				name: call.name,
+				output: r.text,
+				isError: r.isError,
+				durationMs: r.durationMs,
+			};
 		}
 	}
 

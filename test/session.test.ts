@@ -826,4 +826,119 @@ describe("Session", () => {
 			expect(order).toEqual(["stream-start-1", "stream-end-1", "stream-start-2", "stream-end-2"]);
 		});
 	});
+
+	describe("askStream", () => {
+		test(".result() returns a valid TurnResult with correct prompt and text", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.askStream("What is 2+2?").result();
+
+			expect(result.prompt).toBe("What is 2+2?");
+			expect(result.id).toBeTruthy();
+			expect(result.startedAt).toBeGreaterThan(0);
+			expect(result.endedAt).toBeGreaterThanOrEqual(result.startedAt);
+			expect(result.error).toBeNull();
+			// Should have at least a text step
+			const textSteps = result.steps.filter((s) => s.type === "text");
+			expect(textSteps.length).toBeGreaterThan(0);
+		});
+
+		test("iterating yields turn_start and turn_end events", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			const stream = session.askStream("Hello");
+
+			const events: { type: string }[] = [];
+			for await (const event of stream) {
+				events.push({ type: event.type });
+			}
+
+			expect(events[0]?.type).toBe("turn_start");
+			expect(events[events.length - 1]?.type).toBe("turn_end");
+		});
+
+		test("tool calls produce tool_result events", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "search results",
+				}),
+			);
+
+			const result = await session.askStream("Search").result();
+
+			const toolSteps = result.steps.filter((s) => s.type === "tool_call");
+			expect(toolSteps.length).toBeGreaterThan(0);
+			if (toolSteps[0]?.type === "tool_call") {
+				expect(toolSteps[0].name).toBe("rg");
+				expect(toolSteps[0].output).toBe("search results");
+			}
+		});
+
+		test("error conditions produce TurnResult with .error set", async () => {
+			const customStream = (() => ({
+				[Symbol.asyncIterator]: async function* () {
+					yield { type: "error", error: { errorMessage: "API error" } };
+				},
+				result: async () => createMockStreamResult().result(),
+			})) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+			const result = await session.askStream("Test").result();
+
+			expect(result.error).not.toBeNull();
+			expect(result.error?.message).toContain("API");
+		});
+
+		test("concurrent askStream calls are serialized", async () => {
+			const order: string[] = [];
+			let streamCalls = 0;
+
+			const customStream = (() => {
+				streamCalls++;
+				const n = streamCalls;
+				return {
+					[Symbol.asyncIterator]: async function* () {
+						order.push(`start-${n}`);
+						await Bun.sleep(30);
+						order.push(`end-${n}`);
+						yield { type: "text_delta", delta: `r${n}` };
+					},
+					result: async () => ({
+						role: "assistant" as const,
+						content: [{ type: "text" as const, text: `r${n}` }],
+						usage: { input: 10, output: 5, totalTokens: 15 },
+						timestamp: Date.now(),
+						api: "test",
+						provider: "test",
+						model: "test",
+						stopReason: "end_turn",
+					}),
+				};
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+
+			const s1 = session.askStream("q1");
+			const s2 = session.askStream("q2");
+			await Promise.all([s1.result(), s2.result()]);
+
+			expect(order).toEqual(["start-1", "end-1", "start-2", "end-2"]);
+		});
+
+		test("askStream throws synchronously after close", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			await session.close();
+
+			expect(() => session.askStream("test")).toThrow(`Session ${session.id} is closed`);
+		});
+	});
 });
