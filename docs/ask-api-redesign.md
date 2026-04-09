@@ -18,9 +18,6 @@ type StreamEvent =
   | TurnStart
   | TurnEnd
 
-  // === LLM iteration lifecycle (one turn may have multiple iterations) ===
-  | IterationStart
-
   // === Content generation ===
   | ThinkingDelta
   | Thinking
@@ -64,20 +61,7 @@ interface TurnEnd {
 }
 ```
 
-### 2.2 Iteration Lifecycle
-
-A single agent turn may involve multiple LLM calls (iterations). The agent calls the model, the model may request tool calls, those are executed, and the model is called again. Each of these LLM calls is an **iteration**.
-
-```typescript
-/** Marks the beginning of an LLM inference call within the turn. */
-interface IterationStart {
-  type: "iteration_start";
-  /** 0-based index of this iteration within the turn. */
-  index: number;
-}
-```
-
-### 2.3 Content Generation
+### 2.2 Content Generation
 
 ```typescript
 /** Streaming chunk of the model's internal reasoning. */
@@ -117,7 +101,7 @@ interface Text {
 }
 ```
 
-### 2.4 Tool Use
+### 2.3 Tool Use
 
 Tool events carry enough context to be self-describing. The `toolCallId` ties the full lifecycle together.
 
@@ -172,7 +156,7 @@ interface ToolResult {
 }
 ```
 
-### 2.5 Context Management
+### 2.4 Context Management
 
 ```typescript
 /** The session's context was compacted (older messages summarized). */
@@ -187,7 +171,7 @@ interface Compaction {
 }
 ```
 
-### 2.6 Errors
+### 2.5 Errors
 
 The SDK handles retryable errors internally (rate limits, transient network failures, 503s) with backoff. Only unrecoverable errors surface to the consumer.
 
@@ -271,7 +255,7 @@ interface TurnMetadata {
   /** End-to-end wall-clock time for the entire turn (ms). */
   latencyMs: number;
   /** The model used for this turn (may differ from session default if overridden via AskOptions). */
-  model: { provider: string; id: string };
+  model: ModelConfig;
   /** Thinking effort level the model used (undefined if thinking off). */
   thinkingEffort?: string;
   /** Link validation on the response text. */
@@ -310,6 +294,49 @@ interface AskStream extends AsyncIterable<StreamEvent> {
 
 ## 5. Session
 
+### 5.1 Client and `connect()`
+
+The client holds shared infrastructure. `connect()` creates a session with its own behavioral config.
+
+```typescript
+class AskForgeClient {
+  constructor(config: ClientConfig);
+
+  /**
+   * Create a session. Each session has its own model, thinking config,
+   * system prompt, and iteration limit -- immutable for the session's lifetime.
+   *
+   * Multiple sessions can use different models against the same client.
+   */
+  connect(config: SessionConfig): Promise<Session>;
+}
+```
+
+### 5.2 SessionConfig
+
+Behavioral configuration for a single session. Required at `connect()` time. Immutable after session creation.
+
+```typescript
+interface SessionConfig {
+  /** Repository to connect to. Required. */
+  repo: RepoConfig;
+
+  /** Model to use. Required. */
+  model: ModelConfig;
+
+  /** System prompt. If omitted, a default code-analysis prompt is used. */
+  systemPrompt?: string;
+  /** Max tool-use iterations per turn. Required. */
+  maxIterations: number;
+  /** Thinking/reasoning configuration. If omitted, thinking is off. */
+  thinking?: ThinkingConfig;
+  /** Context compaction settings. If omitted, compaction is off. */
+  compaction?: CompactionSettings;
+}
+```
+
+### 5.3 Session
+
 ```typescript
 class Session {
   /** Unique session identifier. */
@@ -317,6 +344,9 @@ class Session {
 
   /** The repository this session is bound to. */
   readonly repo: Repo;
+
+  /** The session's immutable configuration. */
+  readonly config: Readonly<SessionConfig>;
 
   /**
    * Ask a question about the repository.
@@ -351,7 +381,9 @@ class Session {
 }
 ```
 
-### 5.1 AskOptions
+### 5.4 AskOptions
+
+Per-turn overrides. These take precedence over the session's config for a single `ask()` call.
 
 ```typescript
 interface AskOptions {
@@ -368,9 +400,9 @@ interface AskOptions {
   /**
    * Override the model for this single ask() call.
    * Useful for using a cheaper model for simple questions or a more capable
-   * one for complex analysis without creating a new client.
+   * one for complex analysis.
    */
-  model?: { provider: string; id: string };
+  model?: ModelConfig;
 
   /**
    * Override maxIterations for this single ask() call.
@@ -395,34 +427,38 @@ interface AskOptions {
 
 ### 6.1 ClientConfig
 
-No hardcoded defaults. Provider and model are required.
+The client holds shared infrastructure only. No model, no behavioral config.
 
 ```typescript
 interface ClientConfig {
-  /** Model provider (e.g., "anthropic", "openrouter", "google"). Required. */
-  provider: string;
-  /** Model identifier. Required. */
-  model: string;
-
-  /** System prompt. If omitted, a default code-analysis prompt is built at connect() time. */
-  systemPrompt?: string;
-  /** Max tool-use iterations per turn. Required. */
-  maxIterations: number;
-
-  /** Thinking/reasoning configuration. If omitted, thinking is off. */
-  thinking?: ThinkingConfig;
-  /** Context compaction settings. If omitted, compaction is off. */
-  compaction?: CompactionSettings;
   /** Sandbox configuration. If omitted, runs locally. */
   sandbox?: SandboxClientConfig;
-  /** Transport configuration. Determines how the library communicates with the LLM provider. */
-  transport?: TransportConfig;
   /** Logger. If omitted, no logging. */
   logger?: Logger;
+  /** Transport configuration. Determines how the library communicates with the LLM provider. */
+  transport?: TransportConfig;
 }
 ```
 
-### 6.2 TransportConfig
+### 6.2 Shared Types
+
+```typescript
+interface ModelConfig {
+  /** Provider (e.g., "anthropic", "openrouter", "google"). */
+  provider: string;
+  /** Model identifier (e.g., "claude-sonnet-4-6"). */
+  id: string;
+}
+
+interface RepoConfig {
+  /** Repository URL. Required. */
+  url: string;
+  /** Auth token for the repository host. */
+  token?: string;
+}
+```
+
+### 6.3 TransportConfig
 
 The transport abstraction decouples "how we talk to the LLM" from session logic. The default SSE transport wraps pi-ai's `stream()`. Custom transports enable testing, proxying, alternative protocols, and future websocket support.
 
@@ -438,7 +474,7 @@ type TransportConfig =
 type TransportFactory = (request: InferenceRequest) => ProviderStream;
 
 interface InferenceRequest {
-  model: { provider: string; id: string };
+  model: ModelConfig;
   systemPrompt: string;
   messages: Message[];
   tools: Tool[];
@@ -505,34 +541,19 @@ Session
 
 ---
 
-## 9. Open Decisions
+## 9. Design Decisions
 
-### 9.1 Mutable Session Config vs. Per-Turn Overrides
+### 9.1 Config Layering
 
-**Decision needed.** Should session configuration be mutable mid-session (`updateConfig()`), or should all overrides be per-turn via `AskOptions`?
+Configuration is split into three layers with clear ownership:
 
-**Option A: Mutable session config.** Add `getConfig()` and `updateConfig(patch)` to Session. Changes apply to all subsequent `ask()` calls.
+| Layer | Set at | Mutable? | Contains |
+|---|---|---|---|
+| **Client** (`ClientConfig`) | `new AskForgeClient()` | No | Sandbox, logging, transport |
+| **Session** (`SessionConfig`) | `client.connect()` | No | Model, thinking, maxIterations, systemPrompt, compaction, repo |
+| **Turn** (`AskOptions`) | `session.ask()` | N/A (per-call) | Model, thinking, maxIterations overrides |
 
-```typescript
-// Option A interface additions on Session:
-getConfig(): Readonly<MutableSessionConfig>;
-updateConfig(patch: Partial<MutableSessionConfig>): void;
-
-interface MutableSessionConfig {
-  systemPrompt: string;
-  maxIterations: number;
-  thinking?: ThinkingConfig;
-  compaction?: Partial<CompactionSettings>;
-}
-```
-
-Sub-decisions required:
-
-- **Concurrency semantics:** If `updateConfig()` is called while a turn is in-flight, does the in-flight turn use the old or new config? Snapshotting at `ask()` call time is safer but means `updateConfig()` has no effect on work already started.
-- **Partial update semantics:** Does `undefined` in a partial update mean "no change" or "clear/unset"? Both interpretations are valid with `Partial<>`.
-- **System prompt mutation:** Mutating `systemPrompt` mid-session means the model was "one person" for earlier turns and "a different person" for later turns. Compaction summaries generated under an old prompt may be subtly wrong under a new one.
-
-**Option B: Per-turn overrides only (recommended).** No `updateConfig()`. Session config is immutable after construction. Per-turn overrides go in `AskOptions`. This eliminates all sub-decisions above. Config is always deterministic: `sessionBaseline + perCallOverrides`.
+Effective config for a turn is: `sessionConfig + askOptionsOverrides`. No mutable state, no temporal ordering issues, no concurrency edge cases.
 
 ---
 
@@ -545,9 +566,10 @@ Sub-decisions required:
 | `AskResult.response` contains text OR error string | `TurnResult.text` is always text; `.error` is always the error (or null) | Unambiguous |
 | Flat `AskResult` with `inferenceTimeMs`, `totalLinks`, etc. | `TurnResult.metadata` with structured sub-objects | Organized, extensible |
 | `getMessages()` / `replaceMessages()` exposes raw pi-ai messages | `getTurns()` / `getTurn(id)` exposes agent turns | Observable, structured |
-| `ClientConfig.provider` and `model` optional with hardcoded defaults | Both required | No hidden defaults |
-| `ClientConfig.compaction` defaults to enabled | Must be explicitly configured | No hidden defaults |
+| `ClientConfig.provider` and `model` optional with hardcoded defaults | `model` required in `SessionConfig` | No hidden defaults; model is a session-level concern |
+| `ClientConfig.compaction` defaults to enabled | Must be explicitly configured in `SessionConfig` | No hidden defaults |
 | No turn IDs, no branching | `afterTurn` option with explicit IDs | Clear continuation model |
-| No mid-session config changes | Per-turn overrides in `AskOptions` | Adjustable without hidden temporal state |
+| No mid-session config changes | Per-turn overrides in `AskOptions`, immutable session baseline | Adjustable without hidden temporal state |
+| Model locked to client | Model set per-session, overridable per-turn | Heterogeneous multi-agent with a single client |
 | No transport abstraction | `TransportConfig` with SSE default and custom factory | Extensible, testable |
 | Errors mixed into response string | Separate `.error` field; retryable errors handled internally | Clean separation |

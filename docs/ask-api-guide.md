@@ -8,29 +8,55 @@ This guide walks through how to use the `ask()` API with practical examples. For
 
 ### Create a Client
 
-The client requires explicit provider and model configuration -- there are no hidden defaults.
+The client holds shared infrastructure -- transport, sandboxing, logging. No model config here.
 
 ```typescript
 import { AskForgeClient } from "askforge";
 
 const client = new AskForgeClient({
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
-  maxIterations: 15,
-  thinking: { type: "adaptive", effort: "high" },
-  compaction: { enabled: true, contextWindow: 200_000 },
+  sandbox: { /* ... */ },
+  logger: console,
 });
 ```
 
 ### Connect to a Repository
 
+Each session declares its own model and behavioral config. This is where you choose the model, thinking strategy, and iteration limits.
+
 ```typescript
-const session = await client.connect("https://github.com/owner/repo", {
-  token: process.env.GITHUB_TOKEN,
+const session = await client.connect({
+  repo: { url: "https://github.com/owner/repo", token: process.env.GITHUB_TOKEN },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  thinking: { type: "adaptive", effort: "high" },
+  maxIterations: 15,
+  compaction: { enabled: true, contextWindow: 200_000 },
 });
 ```
 
 The session is now bound to the repository and ready to accept questions.
+
+### Multiple Sessions with Different Models
+
+A single client can power sessions with different models -- useful for multi-agent architectures.
+
+```typescript
+const planner = await client.connect({
+  repo: { url: "https://github.com/owner/repo", token: process.env.GITHUB_TOKEN },
+  model: { provider: "anthropic", id: "claude-opus-4-6" },
+  thinking: { type: "adaptive", effort: "high" },
+  maxIterations: 30,
+});
+
+const executor = await client.connect({
+  repo: { url: "https://github.com/owner/repo", token: process.env.GITHUB_TOKEN },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 15,
+});
+
+// Planner decides what to do, executor carries it out
+const plan = await planner.ask("What needs to change to add OAuth support?").result();
+const result = await executor.ask(plan.text).result();
+```
 
 ---
 
@@ -99,34 +125,6 @@ for await (const event of stream) {
       break;
     case "text_delta":
       output.append(event.delta);
-      break;
-  }
-}
-```
-
-### Tracking Iterations
-
-A single turn may involve multiple LLM calls. Use `iteration_start` to track progress.
-
-```typescript
-const stream = session.ask("Refactor the payment module to use the strategy pattern");
-
-for await (const event of stream) {
-  switch (event.type) {
-    case "iteration_start":
-      console.log(`--- LLM call #${event.index + 1} ---`);
-      break;
-    case "text_delta":
-      process.stdout.write(event.delta);
-      break;
-    case "tool_use_start":
-      console.log(`  > ${event.name}`);
-      break;
-    case "tool_result":
-      console.log(`  < ${event.name}: ${event.isError ? "FAILED" : "ok"} (${event.durationMs}ms)`);
-      break;
-    case "turn_end":
-      console.log(`\nCompleted in ${event.metadata.iterations} iterations, ${event.metadata.latencyMs}ms`);
       break;
   }
 }
@@ -224,7 +222,7 @@ Override model, iteration limit, or thinking config for a single turn without mu
 
 ```typescript
 const summary = await session.ask("Give me a one-line summary of this repo", {
-  model: { provider: "anthropic", id: "claude-haiku-4-5" },
+  model: { provider: "anthropic", id: "claude-haiku-4-5-20251001" },
   maxIterations: 3,
   thinking: { effort: "low" },
 }).result();
@@ -358,15 +356,15 @@ Putting it all together -- a complete session with streaming, branching, and per
 import { AskForgeClient } from "askforge";
 
 const client = new AskForgeClient({
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
-  maxIterations: 15,
-  thinking: { type: "adaptive", effort: "high" },
-  compaction: { enabled: true, contextWindow: 200_000 },
+  logger: console,
 });
 
-const session = await client.connect("https://github.com/owner/repo", {
-  token: process.env.GITHUB_TOKEN,
+const session = await client.connect({
+  repo: { url: "https://github.com/owner/repo", token: process.env.GITHUB_TOKEN },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  thinking: { type: "adaptive", effort: "high" },
+  maxIterations: 15,
+  compaction: { enabled: true, contextWindow: 200_000 },
 });
 
 // --- Turn 1: streaming ---
@@ -375,9 +373,6 @@ for await (const event of stream) {
   switch (event.type) {
     case "turn_start":
       console.log(`Turn ${event.turnId} started`);
-      break;
-    case "iteration_start":
-      console.log(`  Iteration ${event.index}`);
       break;
     case "text_delta":
       process.stdout.write(event.delta);
@@ -420,7 +415,7 @@ for (const t of turns) {
 
 // --- Per-turn config override ---
 const turn4 = await session.ask("Quick summary?", {
-  model: { provider: "anthropic", id: "claude-haiku-4-5" },
+  model: { provider: "anthropic", id: "claude-haiku-4-5-20251001" },
   maxIterations: 5,
   thinking: { effort: "low" },
 }).result();
