@@ -49,3 +49,8 @@
 - **Validate mocks against interfaces**: Run type checking to ensure mock objects satisfy all required interface fields
 - **Inject dependencies for testability**: Design classes to accept their dependencies so tests can provide mocks
 - **Separate fast from slow tests**: Use setup hooks appropriately - expensive fixtures in `beforeAll`, isolation cleanup in `afterEach`
+
+## Documentation
+
+- Every new feature addition should update all relevant documentation
+- Always explain your reasoning briefly in comments when fixing a bug
