@@ -24,8 +24,10 @@ export interface CloneResult {
 
 /** Maximum time to wait for a clone to complete (20 minutes). */
 const CLONE_POLL_TIMEOUT_MS = 20 * 60 * 1000;
-/** Interval between clone status polls. */
-const CLONE_POLL_INTERVAL_MS = 2_000;
+/** Initial interval between clone status polls. */
+const CLONE_POLL_INITIAL_INTERVAL_MS = 1_000;
+/** Maximum interval between clone status polls. */
+const CLONE_POLL_MAX_INTERVAL_MS = 5_000;
 
 export class SandboxClient {
 	private config: SandboxClientConfig;
@@ -128,8 +130,10 @@ export class SandboxClient {
 		onProgress?.("Cloning repository…");
 
 		const deadline = Date.now() + CLONE_POLL_TIMEOUT_MS;
+		let pollInterval = CLONE_POLL_INITIAL_INTERVAL_MS;
 		while (Date.now() < deadline) {
-			await Bun.sleep(CLONE_POLL_INTERVAL_MS);
+			await Bun.sleep(pollInterval);
+			pollInterval = Math.min(pollInterval * 1.5, CLONE_POLL_MAX_INTERVAL_MS);
 
 			const statusRes = await fetch(
 				`${this.config.baseUrl}/clone/status/${slug}?commitish=${encodeURIComponent(commit)}`,
