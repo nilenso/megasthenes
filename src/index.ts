@@ -5,6 +5,7 @@ import { consoleLogger, type Logger, nullLogger } from "./logger";
 import { buildDefaultSystemPrompt } from "./prompt";
 import { SandboxClient, type SandboxClientConfig } from "./sandbox/client";
 import {
+	type AskError,
 	type AskOptions,
 	type AskResult,
 	type InvalidLink,
@@ -17,6 +18,7 @@ import { executeTool, tools } from "./tools";
 
 // Re-export all public types and loggers
 export type {
+	AskError,
 	AskOptions,
 	AskResult,
 	CompactionSettings,

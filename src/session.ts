@@ -38,10 +38,26 @@ import {
 
 /** Record of a tool call made during a session */
 export interface ToolCallRecord {
+	/** Unique identifier for this tool call (from the model response) */
+	id: string;
 	/** Name of the tool that was called */
 	name: string;
 	/** Arguments passed to the tool */
 	arguments: Record<string, unknown>;
+	/** Output returned by the tool */
+	output: string;
+	/** Whether the tool execution resulted in an error */
+	isError: boolean;
+	/** Time taken to execute the tool in milliseconds */
+	durationMs: number;
+}
+
+/** Structured error from a failed ask operation */
+export interface AskError {
+	/** Human-readable error message */
+	message: string;
+	/** Raw error details for debugging (e.g., API error object) */
+	details?: unknown;
 }
 
 /** Result returned from Session.ask() */
@@ -50,8 +66,10 @@ export interface AskResult {
 	prompt: string;
 	/** List of tool calls made while answering */
 	toolCalls: ToolCallRecord[];
-	/** The final response text (or error message) */
+	/** The final response text (or error message for backward compat) */
 	response: string;
+	/** Structured error, or null if the turn completed successfully */
+	error: AskError | null;
 	/** Token usage statistics */
 	usage: Usage;
 	/** Total time taken for inference in milliseconds */
@@ -177,12 +195,17 @@ function formatToolExecutionError(toolName: string, error: unknown): string {
 function buildResult(
 	ctx: AskContext,
 	response: string,
-	linkStats: { totalLinks: number; invalidLinks: InvalidLink[] } = { totalLinks: 0, invalidLinks: [] },
+	options: {
+		linkStats?: { totalLinks: number; invalidLinks: InvalidLink[] };
+		error?: AskError;
+	} = {},
 ): AskResult {
+	const { linkStats = { totalLinks: 0, invalidLinks: [] }, error } = options;
 	return {
 		prompt: ctx.question,
 		toolCalls: ctx.toolCalls,
 		response,
+		error: error ?? null,
 		usage: ctx.usage,
 		inferenceTimeMs: Date.now() - ctx.startTime,
 		totalLinks: linkStats.totalLinks,
@@ -364,16 +387,6 @@ export class Session {
 			startTime: Date.now(),
 		};
 
-		// Validate required tools before making any LLM call
-		const missing = await validateRequiredTools();
-		if (missing.length > 0) {
-			const names = missing.join(", ");
-			return buildResult(
-				ctx,
-				`[ERROR: Required tools not installed: ${names}. Install them before using ask-forge locally (e.g. \`brew install ripgrep fd-find\`)]`,
-			);
-		}
-
 		const modelId = `${this.#config.model.provider}/${this.#config.model.id}`;
 		const askSpan = startAskSpan({
 			question,
@@ -450,7 +463,8 @@ export class Session {
 				}
 			}
 
-			const result = buildResult(ctx, "[ERROR: Max iterations reached without a final answer.]");
+			const msg = "Max iterations reached without a final answer.";
+			const result = buildResult(ctx, `[ERROR: ${msg}]`, { error: { message: msg } });
 			endAskSpanWithError(askSpan, "max_iterations_reached");
 			return result;
 		} catch (error) {
@@ -485,7 +499,9 @@ export class Session {
 			});
 			return {
 				done: true,
-				result: buildResult(ctx, `[ERROR: ${outcome.error}]`),
+				result: buildResult(ctx, `[ERROR: ${outcome.error}]`, {
+					error: { message: outcome.error, details: outcome.errorDetails },
+				}),
 			};
 		}
 
@@ -510,7 +526,9 @@ export class Session {
 			});
 			return {
 				done: true,
-				result: buildResult(ctx, `[ERROR: ${errorMsg}]`),
+				result: buildResult(ctx, `[ERROR: ${errorMsg}]`, {
+					error: { message: errorMsg, details: { stopReason: apiError.stopReason } },
+				}),
 			};
 		}
 
@@ -564,7 +582,8 @@ export class Session {
 
 		if (!responseText.trim()) {
 			this.#logger.error("WARNING: Empty response from API", { fullResponse: response });
-			return buildResult(ctx, "[ERROR: Empty response from API - check API key and credits]");
+			const msg = "Empty response from API - check API key and credits";
+			return buildResult(ctx, `[ERROR: ${msg}]`, { error: { message: msg } });
 		}
 
 		// Validate links in the response
@@ -577,7 +596,7 @@ export class Session {
 		}
 
 		this.#logger.log("RESPONSE", "");
-		return buildResult(ctx, responseText, { totalLinks: totalRepoLinks, invalidLinks });
+		return buildResult(ctx, responseText, { linkStats: { totalLinks: totalRepoLinks, invalidLinks } });
 	}
 
 	async #executeToolCalls(
@@ -600,14 +619,16 @@ export class Session {
 				const t0 = Date.now();
 				try {
 					const result = await this.#config.executeTool(call.name, call.arguments, this.repo.localPath);
+					const durationMs = Date.now() - t0;
 					endToolSpan(toolSpan, result);
-					this.#logger.log(`TOOL_DONE: ${call.name}`, `${Date.now() - t0}ms`);
-					return { text: result, isError: false };
+					this.#logger.log(`TOOL_DONE: ${call.name}`, `${durationMs}ms`);
+					return { text: result, isError: false, durationMs };
 				} catch (error) {
+					const durationMs = Date.now() - t0;
 					const errorText = formatToolExecutionError(call.name, error);
 					endToolSpanWithError(toolSpan, error, errorText);
-					this.#logger.warn(`TOOL_ERROR: ${call.name}`, `${Date.now() - t0}ms ${errorText}`);
-					return { text: errorText, isError: true };
+					this.#logger.warn(`TOOL_ERROR: ${call.name}`, `${durationMs}ms ${errorText}`);
+					return { text: errorText, isError: true, durationMs };
 				}
 			}),
 		);
@@ -615,16 +636,21 @@ export class Session {
 
 		// Push results back in request order to preserve conversation context
 		toolCalls.forEach((call, j) => {
+			const r = results[j];
 			toolCallRecords.push({
+				id: call.id,
 				name: call.name,
 				arguments: call.arguments,
+				output: r?.text ?? "",
+				isError: r?.isError ?? false,
+				durationMs: r?.durationMs ?? 0,
 			});
 			this.#context.messages.push({
 				role: "toolResult",
 				toolCallId: call.id,
 				toolName: call.name,
-				content: [{ type: "text", text: results[j]?.text ?? "" }],
-				isError: results[j]?.isError ?? false,
+				content: [{ type: "text", text: r?.text ?? "" }],
+				isError: r?.isError ?? false,
 				timestamp: Date.now(),
 			});
 		});
