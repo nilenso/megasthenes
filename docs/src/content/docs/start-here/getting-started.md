@@ -32,6 +32,12 @@ npx jsr add @nilenso/megasthenes
 bunx jsr add @nilenso/megasthenes
 ```
 
+Install system dependencies (git, ripgrep, fd) automatically:
+
+```bash
+bunx megasthenes install-deps
+```
+
 ## Quick Start
 
 ```ts
