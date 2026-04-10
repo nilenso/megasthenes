@@ -980,11 +980,11 @@ describe("Session", () => {
 			expect(session.getTurn(id)?.prompt).toBe("Hello");
 		});
 
-		test("getTurn() returns undefined for unknown id", async () => {
+		test("getTurn() returns null for unknown id", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
 			await session.askStream("Hello").result();
 
-			expect(session.getTurn("nonexistent")).toBeUndefined();
+			expect(session.getTurn("nonexistent")).toBeNull();
 		});
 
 		test("afterTurn branches from the specified turn", async () => {

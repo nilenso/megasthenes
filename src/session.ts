@@ -431,9 +431,9 @@ export class Session {
 		return [...this.#turns];
 	}
 
-	/** Get a specific turn by ID. Returns undefined if not found. */
-	getTurn(id: string): TurnResult | undefined {
-		return this.#turns.find((t) => t.id === id);
+	/** Get a specific turn by ID. Returns null if not found. */
+	getTurn(id: string): TurnResult | null {
+		return this.#turns.find((t) => t.id === id) ?? null;
 	}
 
 	async *#doAskStream(
