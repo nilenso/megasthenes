@@ -4,16 +4,7 @@ import { type ConnectOptions, connectRepo, type Forge, type ForgeName, type Repo
 import { consoleLogger, type Logger, nullLogger } from "./logger";
 import { buildDefaultSystemPrompt } from "./prompt";
 import { SandboxClient, type SandboxClientConfig } from "./sandbox/client";
-import {
-	type AskError,
-	type AskOptions,
-	type AskResult,
-	type InvalidLink,
-	type OnProgress,
-	type ProgressEvent,
-	Session,
-	type ToolCallRecord,
-} from "./session";
+import { Session } from "./session";
 import { executeTool, tools } from "./tools";
 import type {
 	AskStream,
@@ -28,22 +19,16 @@ import type {
 
 // Re-export all public types and loggers
 export type {
-	AskError,
-	AskOptions,
-	AskResult,
 	AskStream,
 	CompactionSettings,
 	ConnectOptions,
 	Forge,
 	ForgeName,
-	InvalidLink,
 	KnownProvider,
 	Logger,
 	Message,
 	ModelConfig,
-	NewAskOptions,
-	OnProgress,
-	ProgressEvent,
+	NewAskOptions as AskOptions,
 	Repo,
 	SandboxClientConfig,
 	Session,
@@ -51,7 +36,6 @@ export type {
 	StreamEvent,
 	ThinkingConfig,
 	TokenUsage,
-	ToolCallRecord,
 	TurnMetadata,
 	TurnResult,
 };
@@ -87,7 +71,7 @@ interface ForgeConfigBase {
  * Configuration for the megasthenes library.
  *
  * Provider and model must either both be specified or both omitted.
- * If omitted, defaults to openrouter with claude-sonnet-4.6.
+ * If omitted, defaults to anthropic with claude-sonnet-4.6.
  */
 export type ForgeConfig = ForgeConfigBase &
 	(
@@ -103,26 +87,6 @@ export type ForgeConfig = ForgeConfigBase &
 		  }
 	);
 
-/**
- * Client for connecting to repositories and creating sessions.
- *
- * The client holds configuration (model, prompts, sandbox settings) and can create
- * multiple sessions to different repositories. When using sandbox mode, the sandbox
- * client is reused across all sessions for efficiency.
- *
- * @example
- * ```ts
- * const client = new Client({
- *   provider: "openrouter",
- *   model: "anthropic/claude-sonnet-4.6",
- *   systemPrompt: "You are a code analysis assistant.",
- *   maxIterations: 20,
- * });
- *
- * const session1 = await client.connect("https://github.com/owner/repo1");
- * const session2 = await client.connect("https://github.com/owner/repo2");
- * ```
- */
 /** Resolved configuration with all defaults applied */
 interface ResolvedConfig {
 	provider: KnownProvider;
@@ -142,12 +106,6 @@ export class Client {
 	readonly #logger: Logger;
 	readonly #sandboxClient?: SandboxClient;
 
-	/**
-	 * Create a new Client.
-	 *
-	 * @param config - Library configuration (defaults to openrouter with claude-sonnet-4.6)
-	 * @param logger - Logger instance (defaults to consoleLogger)
-	 */
 	constructor(config: ForgeConfig = {}, logger: Logger = consoleLogger) {
 		this.config = {
 			provider: config.provider ?? MODEL_PROVIDER,
@@ -165,14 +123,6 @@ export class Client {
 		}
 	}
 
-	/**
-	 * Connect to a repository and create a session.
-	 *
-	 * @param repoUrl - The URL of the repository to connect to
-	 * @param options - Git connection options (token, forge, commitish)
-	 * @param onProgress - Optional callback for clone progress messages (useful for long clones)
-	 * @returns A Session for asking questions about the repository
-	 */
 	async connect(
 		repoUrl: string,
 		options: ConnectOptions = {},
@@ -184,22 +134,17 @@ export class Client {
 		const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(config.provider, config.model);
 
 		if (this.#sandboxClient) {
-			// Sandbox mode: clone and execute tools in isolated container
 			const cloneResult = await this.#sandboxClient.clone(repoUrl, options.commitish, onProgress);
 
-			// Create a Repo-like object with sandbox metadata
 			const repo: Repo = {
 				url: repoUrl,
 				localPath: cloneResult.worktree,
-				forge: { name: "github", buildCloneUrl: (url) => url }, // Sandbox handles auth
+				forge: { name: "github", buildCloneUrl: (url) => url },
 				commitish: cloneResult.sha,
-				cachePath: "", // Not applicable for sandbox
+				cachePath: "",
 			};
 
-			// Capture sandboxClient reference for the closure
 			const sandboxClient = this.#sandboxClient;
-
-			// Wrap sandbox executeTool to match the expected signature
 			const sandboxExecuteTool = async (name: string, args: Record<string, unknown>, _cwd: string) => {
 				return sandboxClient.executeTool(cloneResult.slug, cloneResult.sha, name, args);
 			};
@@ -220,9 +165,7 @@ export class Client {
 			});
 		}
 
-		// Local mode: clone and execute tools on local filesystem
 		const repo = await connectRepo(repoUrl, options);
-
 		const systemPrompt = config.systemPrompt ?? buildDefaultSystemPrompt(repoUrl, repo.commitish);
 
 		return new Session(repo, {
@@ -239,12 +182,6 @@ export class Client {
 		});
 	}
 
-	/**
-	 * Reset the sandbox, deleting all cloned repositories.
-	 * Only available when sandbox mode is enabled.
-	 *
-	 * @throws Error if sandbox mode is not enabled
-	 */
 	async resetSandbox(): Promise<void> {
 		if (!this.#sandboxClient) {
 			throw new Error("Sandbox mode is not enabled");

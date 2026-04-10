@@ -16,7 +16,6 @@ export interface LocalWorkspace {
 
 export interface ToolExecutionResult {
 	output: string;
-	result: Awaited<ReturnType<Session["ask"]>>;
 	session: Session;
 }
 
@@ -136,11 +135,9 @@ export async function runToolViaAsk(
 		stream: createToolStream(toolName, { path }),
 	});
 
-	const result = await session.ask(`${toolName} ${path}`);
-	const toolResult = session
-		.getMessages()
-		.find((message) => message.role === "toolResult" && message.toolName === toolName);
-	const output = (toolResult?.content[0] as { text?: string } | undefined)?.text ?? "";
+	const turnResult = await session.ask(`${toolName} ${path}`).result();
+	const toolStep = turnResult.steps.find((s) => s.type === "tool_call" && s.name === toolName);
+	const output = toolStep?.type === "tool_call" ? toolStep.output : "";
 
-	return { output, result, session };
+	return { output, session };
 }
