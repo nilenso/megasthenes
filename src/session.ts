@@ -29,7 +29,7 @@ import {
 	startGenerationSpan,
 	startToolSpan,
 } from "./tracing";
-import type { AskStream, ModelConfig, NewAskOptions, RepoConfig, StreamEvent, TurnMetadata, TurnResult } from "./types";
+import type { AskOptions, AskStream, ModelConfig, RepoConfig, StreamEvent, TurnMetadata, TurnResult } from "./types";
 
 export type { Message };
 
@@ -185,7 +185,7 @@ export class Session {
 	 * @throws Error (synchronous) if the session is closed
 	 * @throws Error (synchronous) if afterTurn references an unknown turn ID
 	 */
-	ask(prompt: string, options?: NewAskOptions): AskStream {
+	ask(prompt: string, options?: AskOptions): AskStream {
 		if (this.#closed) {
 			throw new Error(`Session ${this.id} is closed`);
 		}
@@ -246,7 +246,7 @@ export class Session {
 		prompt: string,
 		prevPending: Promise<unknown>,
 		onDone: () => void,
-		options?: NewAskOptions,
+		options?: AskOptions,
 	): AsyncGenerator<StreamEvent> {
 		let askSpan: import("@opentelemetry/api").Span | undefined;
 		let askSpanEnded = false;

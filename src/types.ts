@@ -1,8 +1,8 @@
 /**
- * New API types for the megasthenes ask() redesign.
+ * Core types for the megasthenes ask() API.
  *
- * These types define the streaming event model, turn results, and the
- * AskStream interface that will replace the current callback-based API.
+ * Defines the streaming event model, turn results, steps, and the
+ * AskStream interface.
  */
 
 import type { ThinkingConfig } from "./config";
@@ -266,7 +266,7 @@ export interface RepoConfig {
 // =============================================================================
 
 /** Per-turn overrides for ask(). */
-export interface NewAskOptions {
+export interface AskOptions {
 	/** Continue from after this specific turn (enables branching). */
 	afterTurn?: string;
 	/** Override the model for this single ask() call. */

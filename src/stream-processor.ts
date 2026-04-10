@@ -60,7 +60,7 @@ export type StreamFn = (
 ) => AssistantMessageEventStream;
 
 // =============================================================================
-// StreamEvent-based processor
+// Stream processor
 // =============================================================================
 
 /** Result of processStreamToEvents: an async generator of events plus access to the final response. */

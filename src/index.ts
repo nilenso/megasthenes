@@ -4,12 +4,12 @@ import { type ConnectOptions, connectRepo, type Forge, type ForgeName, type Repo
 import { consoleLogger, type Logger, nullLogger } from "./logger";
 import { buildDefaultSystemPrompt } from "./prompt";
 import { SandboxClient, type SandboxClientConfig } from "./sandbox/client";
-import { Session } from "./session";
+import { type PublicSessionConfig, Session } from "./session";
 import { executeTool, tools } from "./tools";
 import type {
+	AskOptions,
 	AskStream,
 	ModelConfig,
-	NewAskOptions,
 	RepoConfig,
 	Step,
 	StreamEvent,
@@ -20,6 +20,7 @@ import type {
 
 // Re-export all public types and loggers
 export type {
+	AskOptions,
 	AskStream,
 	CompactionSettings,
 	Forge,
@@ -28,7 +29,7 @@ export type {
 	Logger,
 	Message,
 	ModelConfig,
-	NewAskOptions as AskOptions,
+	PublicSessionConfig,
 	Repo,
 	RepoConfig,
 	SandboxClientConfig,
