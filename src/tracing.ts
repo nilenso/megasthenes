@@ -53,8 +53,6 @@ const ATTR = {
 	COMPACTION_WAS_COMPACTED: "megasthenes.compaction.was_compacted",
 	COMPACTION_TOKENS_BEFORE: "megasthenes.compaction.tokens_before",
 	COMPACTION_TOKENS_AFTER: "megasthenes.compaction.tokens_after",
-	RESPONSE_TOTAL_LINKS: "megasthenes.response.total_links",
-	RESPONSE_INVALID_LINKS: "megasthenes.response.invalid_links",
 	ERROR_TYPE: "error.type",
 	ERROR_NAME: "megasthenes.error.name",
 	ERROR_MESSAGE: "megasthenes.error.message",
@@ -187,14 +185,10 @@ export function endAskSpan(
 	result: {
 		toolCallCount: number;
 		totalIterations: number;
-		totalLinks: number;
-		invalidLinks: number;
 		usage: { inputTokens: number; outputTokens: number };
 	},
 ): void {
 	span.setAttributes({
-		[ATTR.RESPONSE_TOTAL_LINKS]: result.totalLinks,
-		[ATTR.RESPONSE_INVALID_LINKS]: result.invalidLinks,
 		[ATTR.USAGE_INPUT_TOKENS]: result.usage.inputTokens,
 		[ATTR.USAGE_OUTPUT_TOKENS]: result.usage.outputTokens,
 		[ATTR.TOTAL_ITERATIONS]: result.totalIterations,

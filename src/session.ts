@@ -15,6 +15,20 @@ import type { ThinkingConfig } from "./config";
 import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { processStreamToEvents, type StreamFn } from "./stream-processor";
+import {
+	endAskSpan,
+	endAskSpanWithError,
+	endCompactionSpan,
+	endCompactionSpanWithError,
+	endGenerationSpan,
+	endGenerationSpanWithError,
+	endToolSpan,
+	endToolSpanWithError,
+	startAskSpan,
+	startCompactionSpan,
+	startGenerationSpan,
+	startToolSpan,
+} from "./tracing";
 import type { AskStream, ModelConfig, NewAskOptions, RepoConfig, StreamEvent, TurnMetadata, TurnResult } from "./types";
 
 export type { Message };
@@ -234,6 +248,11 @@ export class Session {
 		onDone: () => void,
 		options?: NewAskOptions,
 	): AsyncGenerator<StreamEvent> {
+		let askSpan: import("@opentelemetry/api").Span | undefined;
+		let askSpanEnded = false;
+		const totalUsage = { inputTokens: 0, outputTokens: 0 };
+		let totalToolCalls = 0;
+
 		try {
 			// Serialize with any previous ask call
 			await prevPending;
@@ -252,19 +271,42 @@ export class Session {
 				return;
 			}
 
+			// Resolve model for this turn (per-turn override or session default)
+			const turnModel = options?.model
+				? (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(options.model.provider, options.model.id)
+				: this.#config.model;
+
+			const modelId = `${turnModel.provider}/${turnModel.id}`;
+
 			const turnId = randomUUID();
 			const startedAt = Date.now();
 			yield { type: "turn_start", turnId, prompt, timestamp: startedAt };
+
+			// Start ask span after turn_start yield
+			askSpan = startAskSpan({
+				question: prompt,
+				sessionId: this.id,
+				repoUrl: this.repo.url,
+				commitish: this.repo.commitish,
+				model: modelId,
+				systemPrompt: this.#context.systemPrompt,
+			});
 
 			// Compaction
 			const newQuestionMessage: Message = { role: "user", content: prompt, timestamp: Date.now() };
 			const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
 
+			const compactionSpan = startCompactionSpan(askSpan);
 			try {
 				const compactionResult = await maybeCompact(this.#config.model, messagesWithQuestion, this.#compactionSummary);
 				if (compactionResult.wasCompacted) {
 					this.#context.messages = compactionResult.messages;
 					this.#compactionSummary = compactionResult.summary;
+					endCompactionSpan(compactionSpan, {
+						wasCompacted: true,
+						tokensBefore: compactionResult.tokensBefore,
+						tokensAfter: compactionResult.tokensAfter,
+					});
 					yield {
 						type: "compaction",
 						summary: compactionResult.summary ?? "",
@@ -276,15 +318,12 @@ export class Session {
 					};
 				} else {
 					this.#context.messages.push(newQuestionMessage);
+					endCompactionSpan(compactionSpan, { wasCompacted: false });
 				}
-			} catch {
+			} catch (compactionError) {
 				this.#context.messages.push(newQuestionMessage);
+				endCompactionSpanWithError(compactionSpan, compactionError);
 			}
-
-			// Resolve model for this turn (per-turn override or session default)
-			const turnModel = options?.model
-				? (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(options.model.provider, options.model.id)
-				: this.#config.model;
 
 			const maxIterations = options?.maxIterations ?? this.#config.maxIterations;
 			let iterations = 0;
@@ -293,11 +332,20 @@ export class Session {
 				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
 					yield { type: "error", message: "Aborted" };
+					endAskSpanWithError(askSpan, "aborted");
+					askSpanEnded = true;
 					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
 					return;
 				}
 
 				iterations = iteration + 1;
+
+				const genSpan = startGenerationSpan(askSpan, {
+					iteration: iterations,
+					model: modelId,
+					provider: String(turnModel.provider),
+					messages: [...this.#context.messages],
+				});
 
 				const { streamFn, streamOptions } = this.#resolveStreamCall(options?.thinking);
 				const { events, response: getResponse } = processStreamToEvents(
@@ -312,13 +360,11 @@ export class Session {
 				for await (const event of events) {
 					if (event.type === "error") {
 						hadError = true;
+						endGenerationSpanWithError(genSpan, event.message);
 						yield event;
-						// Error terminates the turn
-						yield {
-							type: "turn_end",
-							turnId,
-							metadata: this.#buildTurnMetadata(iterations, startedAt),
-						};
+						endAskSpanWithError(askSpan, "generation_failed", event.message);
+						askSpanEnded = true;
+						yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
 						return;
 					}
 					yield event;
@@ -330,6 +376,12 @@ export class Session {
 				const response = await getResponse();
 				this.#context.messages.push(response);
 
+				// Accumulate usage
+				if (response.usage) {
+					totalUsage.inputTokens += response.usage.input ?? 0;
+					totalUsage.outputTokens += response.usage.output ?? 0;
+				}
+
 				// Check if we have tool calls
 				const responseToolCalls = response.content.filter(
 					(b): b is { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> } =>
@@ -337,19 +389,56 @@ export class Session {
 				);
 
 				if (responseToolCalls.length === 0) {
-					// Final text response — turn is done
+					// Final text response
+					const textBlocks = response.content.filter((b) => b.type === "text");
+					const responseText = textBlocks.map((b) => (b as { type: "text"; text: string }).text).join("\n");
+
+					if (!responseText.trim()) {
+						endGenerationSpanWithError(genSpan, "Empty response from API");
+					} else {
+						endGenerationSpan(genSpan, {
+							output: response.content,
+							inputTokens: response.usage?.input ?? 0,
+							outputTokens: response.usage?.output ?? 0,
+							cacheReadTokens: response.usage?.cacheRead ?? 0,
+							cacheCreationTokens: response.usage?.cacheWrite ?? 0,
+							stopReason: (response as unknown as { stopReason?: string }).stopReason,
+						});
+					}
+					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
+					askSpanEnded = true;
 					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
 					return;
 				}
 
 				// Execute tool calls and yield results
-				yield* this.#executeToolCalls(responseToolCalls);
+				totalToolCalls += responseToolCalls.length;
+				endGenerationSpan(genSpan, {
+					output: response.content,
+					inputTokens: response.usage?.input ?? 0,
+					outputTokens: response.usage?.output ?? 0,
+					cacheReadTokens: response.usage?.cacheRead ?? 0,
+					cacheCreationTokens: response.usage?.cacheWrite ?? 0,
+					stopReason: (response as unknown as { stopReason?: string }).stopReason,
+				});
+				yield* this.#executeToolCalls(responseToolCalls, genSpan);
 			}
 
 			// Max iterations reached
 			yield { type: "error", message: "Max iterations reached without a final answer." };
+			endAskSpanWithError(askSpan, "max_iterations_reached");
+			askSpanEnded = true;
 			yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+		} catch (error) {
+			if (askSpan && !askSpanEnded) {
+				endAskSpanWithError(askSpan, "unexpected_error", error);
+				askSpanEnded = true;
+			}
+			throw error;
 		} finally {
+			if (askSpan && !askSpanEnded) {
+				endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: 0, usage: totalUsage });
+			}
 			onDone();
 		}
 	}
@@ -369,15 +458,23 @@ export class Session {
 
 	async *#executeToolCalls(
 		toolCalls: { id: string; name: string; arguments: Record<string, unknown> }[],
+		parentSpan: import("@opentelemetry/api").Span,
 	): AsyncGenerator<StreamEvent> {
 		const results = await Promise.all(
 			toolCalls.map(async (call) => {
+				const toolSpan = startToolSpan(parentSpan, {
+					toolName: call.name,
+					toolCallId: call.id,
+					args: call.arguments,
+				});
 				const t0 = Date.now();
 				try {
 					const result = await this.#config.executeTool(call.name, call.arguments, this.repo.localPath);
+					endToolSpan(toolSpan, result);
 					return { text: result, isError: false, durationMs: Date.now() - t0 };
 				} catch (error) {
 					const errorText = formatToolExecutionError(call.name, error);
+					endToolSpanWithError(toolSpan, error, errorText);
 					return { text: errorText, isError: true, durationMs: Date.now() - t0 };
 				}
 			}),

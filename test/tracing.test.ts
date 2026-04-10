@@ -323,9 +323,7 @@ function expectSpanErrorDetails(
 // Install test tracer provider before all tests
 trace.setGlobalTracerProvider(testTracerProvider);
 
-// OTel tracing was removed with the old ask() code path.
-// These tests are skipped until tracing is re-integrated into the new streaming path.
-describe.skip("OTel tracing", () => {
+describe("OTel tracing", () => {
 	beforeEach(() => {
 		recorder.clear();
 	});
@@ -337,7 +335,7 @@ describe.skip("OTel tracing", () => {
 	describe("ask span", () => {
 		test("creates root span with GenAI attributes", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("What is this?");
+			await session.ask("What is this?").result();
 
 			const span = recorder.getSpan("ask");
 			expect(span).toBeDefined();
@@ -352,7 +350,7 @@ describe.skip("OTel tracing", () => {
 
 		test("emits system prompt as event", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const span = recorder.getSpan("ask");
 			const sysEvent = span?.events.find((e) => e.name === "gen_ai.system_instructions");
@@ -369,21 +367,19 @@ describe.skip("OTel tracing", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const span = recorder.getSpan("ask");
 			expect(span?.attributes["gen_ai.usage.input_tokens"]).toBe(200);
 			expect(span?.attributes["gen_ai.usage.output_tokens"]).toBe(80);
-			expect(span?.attributes["megasthenes.response.total_links"]).toBe(0);
-			expect(span?.attributes["megasthenes.response.invalid_links"]).toBe(0);
 			expect(span?.attributes["megasthenes.total_iterations"]).toBe(2);
 			expect(span?.attributes["megasthenes.total_tool_calls"]).toBe(1);
 		});
 
 		test("each ask() creates a separate root span", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("First");
-			await session.ask("Second");
+			await session.ask("First").result();
+			await session.ask("Second").result();
 
 			const askSpans = recorder.getSpans("ask");
 			expect(askSpans.length).toBe(2);
@@ -398,7 +394,7 @@ describe.skip("OTel tracing", () => {
 	describe("compaction span", () => {
 		test("emits compaction span as child of ask", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const askSpan = recorder.getSpan("ask");
 			const compSpan = recorder.getSpan("compaction");
@@ -416,7 +412,7 @@ describe.skip("OTel tracing", () => {
 	describe("generation span", () => {
 		test("emits gen_ai.chat span with model, provider, and iteration", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expect(genSpan).toBeDefined();
@@ -428,7 +424,7 @@ describe.skip("OTel tracing", () => {
 
 		test("records stop reason on generation span", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expect(genSpan?.attributes["gen_ai.response.finish_reason"]).toBe("end_turn");
@@ -436,7 +432,7 @@ describe.skip("OTel tracing", () => {
 
 		test("emits input and output message events", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			const inputEvent = genSpan?.events.find((e) => e.name === "gen_ai.input.messages");
@@ -449,7 +445,7 @@ describe.skip("OTel tracing", () => {
 
 		test("records token usage attributes", async () => {
 			const session = new Session(createMockRepo(), createMockConfig());
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expect(genSpan?.attributes["gen_ai.usage.input_tokens"]).toBe(100);
@@ -467,7 +463,7 @@ describe.skip("OTel tracing", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Hello?");
+			await session.ask("Hello?").result();
 
 			const genSpans = recorder.getSpans("gen_ai.chat");
 			expect(genSpans.length).toBe(2);
@@ -479,12 +475,12 @@ describe.skip("OTel tracing", () => {
 			const streamFn = (() => createErrorStreamResult()) as unknown as SessionConfig["stream"];
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
 
-			await session.ask("Will fail");
+			await session.ask("Will fail").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "generation_failed",
-				message: "Rate limit exceeded",
+				message: "API call failed: Rate limit exceeded",
 			});
 		});
 	});
@@ -503,7 +499,7 @@ describe.skip("OTel tracing", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Search");
+			await session.ask("Search").result();
 
 			const toolSpans = recorder.getSpans("gen_ai.execute_tool");
 			expect(toolSpans.length).toBe(1);
@@ -521,7 +517,7 @@ describe.skip("OTel tracing", () => {
 
 			const executeTool = async () => "file contents here";
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn, executeTool }));
-			await session.ask("Read file");
+			await session.ask("Read file").result();
 
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
 			const argsEvent = toolSpan?.events.find((e) => e.name === "gen_ai.tool.call.arguments");
@@ -544,7 +540,7 @@ describe.skip("OTel tracing", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Search");
+			await session.ask("Search").result();
 
 			const toolSpans = recorder.getSpans("gen_ai.execute_tool");
 			expect(toolSpans.length).toBe(2);
@@ -561,7 +557,7 @@ describe.skip("OTel tracing", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Search");
+			await session.ask("Search").result();
 
 			const chatSpan = recorder.getSpans("gen_ai.chat")[0];
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
@@ -578,7 +574,7 @@ describe.skip("OTel tracing", () => {
 			const streamFn = (() => createToolCallStreamResult()) as unknown as SessionConfig["stream"];
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn, maxIterations: 2 }));
 
-			await session.ask("Loop");
+			await session.ask("Loop").result();
 
 			const askSpan = recorder.getSpan("ask");
 			expectSpanErrorDetails(askSpan, {
@@ -592,7 +588,7 @@ describe.skip("OTel tracing", () => {
 			const streamFn = (() => createErrorStreamResult()) as unknown as SessionConfig["stream"];
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
 
-			await session.ask("Fail");
+			await session.ask("Fail").result();
 
 			const askSpan = recorder.getSpan("ask");
 			const genSpan = recorder.getSpan("gen_ai.chat");
@@ -600,12 +596,12 @@ describe.skip("OTel tracing", () => {
 			// Generation ended with error
 			expect(genSpan?.status.code).toBe(SpanStatusCode.ERROR);
 			expect(genSpan?.attributes["error.type"]).toBe("generation_failed");
-			expect(genSpan?.attributes["megasthenes.error.message"]).toBe("Rate limit exceeded");
+			expect(genSpan?.attributes["megasthenes.error.message"]).toBe("API call failed: Rate limit exceeded");
 			expect(genSpan?.ended).toBe(true);
 
-			// Ask span still ended (no orphan)
+			// Ask span ended with error (stream error terminates the turn)
 			expect(askSpan?.ended).toBe(true);
-			expect(askSpan?.status.code).toBe(SpanStatusCode.OK); // ask succeeded in returning a result
+			expect(askSpan?.status.code).toBe(SpanStatusCode.ERROR);
 		});
 
 		test("tool execution error ends tool span with error and still lets ask complete", async () => {
@@ -622,8 +618,9 @@ describe.skip("OTel tracing", () => {
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn, executeTool }));
 
-			const result = await session.ask("Boom");
-			expect(result.response).toBe("Hello world");
+			const result = await session.ask("Boom").result();
+			// Tool error doesn't prevent final response
+			expect(result.error).toBeNull();
 
 			// Tool span ended with error
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
@@ -641,7 +638,7 @@ describe.skip("OTel tracing", () => {
 			expect(askSpan?.ended).toBe(true);
 		});
 
-		test("API error in response records string error as exception on generation span", async () => {
+		test("empty response records error on generation span", async () => {
 			const streamFn = (() => ({
 				[Symbol.asyncIterator]: async function* () {
 					yield { type: "text_delta", delta: "" };
@@ -654,18 +651,17 @@ describe.skip("OTel tracing", () => {
 					api: "test",
 					provider: "test",
 					model: "test",
-					stopReason: "error",
-					errorMessage: "Rate limit exceeded",
+					stopReason: "end_turn",
 				}),
 			})) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			await session.ask("Fail with API error");
+			await session.ask("Fail with empty response").result();
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "generation_failed",
-				message: "Rate limit exceeded",
+				message: "Empty response from API",
 			});
 			expect(genSpan?.ended).toBe(true);
 		});
@@ -688,9 +684,9 @@ describe.skip("OTel tracing", () => {
 			})) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: streamFn }));
-			const result = await session.ask("Return nothing");
+			const _result = await session.ask("Return nothing").result();
 
-			expect(result.response).toBe("[ERROR: Empty response from API - check API key and credits]");
+			// Empty response still completes (text step will be empty)
 
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
@@ -699,56 +695,35 @@ describe.skip("OTel tracing", () => {
 			});
 		});
 
-		test("compaction error records structured details on the compaction span", async () => {
-			const loggerThatFailsOnCompactionLog = {
-				...nullLogger,
-				log: (label: string) => {
-					if (label === "[compaction]") {
-						throw new Error("logger failed during compaction");
-					}
-				},
-			};
-			const session = new Session(
-				createMockRepo(),
-				createMockConfig({
-					logger: loggerThatFailsOnCompactionLog,
-					stream: (() => createMockStreamResult()) as unknown as SessionConfig["stream"],
-				}),
-			);
-			session.replaceMessages([
-				{ role: "user", content: "x".repeat(400_000), timestamp: Date.now() },
-				{ role: "user", content: "y".repeat(400_000), timestamp: Date.now() + 1 },
-			]);
+		test("compaction span is always emitted (even when not compacted)", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
 
-			await session.ask("Will compaction fail?");
+			await session.ask("Hello?").result();
 
-			const compSpan = recorder
-				.getSpans("compaction")
-				.reverse()
-				.find((span) => span.attributes["error.type"] === "compaction_failed");
+			const compSpan = recorder.getSpan("compaction");
 			expect(compSpan).toBeDefined();
-			expect(typeof compSpan?.status.message).toBe("string");
-			expect((compSpan?.status.message ?? "").length).toBeGreaterThan(0);
 			expect(compSpan?.ended).toBe(true);
-			expect(compSpan?.status.code).toBe(SpanStatusCode.ERROR);
-			expect(compSpan?.attributes["error.type"]).toBe("compaction_failed");
+			expect(compSpan?.attributes["megasthenes.compaction.was_compacted"]).toBe(false);
+			expect(compSpan?.status.code).toBe(SpanStatusCode.OK);
 		});
 
 		test("unexpected ask failures record structured details on the ask span", async () => {
-			const session = new Session(createMockRepo(), createMockConfig());
+			const throwingStream = (() => {
+				throw new Error("stream setup exploded");
+			}) as unknown as SessionConfig["stream"];
 
-			await expect(
-				session.ask("Explode", {
-					onProgress: () => {
-						throw new Error("progress exploded");
-					},
-				}),
-			).rejects.toThrow("progress exploded");
+			const session = new Session(createMockRepo(), createMockConfig({ stream: throwingStream }));
+
+			try {
+				await session.ask("Explode").result();
+			} catch {
+				// Expected
+			}
 
 			const askSpan = recorder.getSpan("ask");
 			expectSpanErrorDetails(askSpan, {
-				errorType: "unexpected_error",
-				message: "progress exploded",
+				errorType: "generation_failed",
+				message: "API call failed: stream setup exploded",
 			});
 		});
 	});
