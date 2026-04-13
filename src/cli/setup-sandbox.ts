@@ -77,7 +77,9 @@ function checkDocker(): boolean {
 function checkDockerCompose(): void {
 	const result = spawnSync("docker-compose", ["version"], { stdio: "pipe" });
 	if (result.status !== 0) {
-		console.warn("Warning: docker-compose not found. Install it to start the sandbox (e.g. brew install docker-compose).");
+		console.warn(
+			"Warning: docker-compose not found. Install it to start the sandbox (e.g. brew install docker-compose).",
+		);
 	}
 }
 
