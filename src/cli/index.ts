@@ -1,3 +1,8 @@
+/**
+ * CLI for megasthenes — install system dependencies and set up the sandbox server.
+ *
+ * @module
+ */
 import { installDeps } from "./install-deps.ts";
 import { setupSandbox } from "./setup-sandbox.ts";
 
