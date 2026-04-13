@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.19] - 2026-04-13
+
+### Added
+* `setup-sandbox` CLI command — generates a docker-compose file for the sandbox server
+* `install-deps` CLI command — checks for and installs system prerequisites (git, ripgrep, fd)
+* Docker image publishing workflow to GHCR (multi-platform amd64/arm64)
+* `./cli` export in jsr.json and `bin` entry in package.json
+* Streaming ask API with `askStream()` and turn-based conversation support
+* Tool record enrichment and error handling in ask API
+* Stream event types and turn result builder
+
+### Changed
+* Renamed project from ask-forge to megasthenes
+* Unified tool execution and early validation
+* Sandbox clone polling uses exponential backoff
+* Sandbox supports container runtimes with ambient capabilities
+
+### Fixed
+* Prerequisite checks short-circuit on non-Linux and missing Docker
+* CLI arg validation for missing flag values
+* Sandbox bwrap ambient capabilities support
+
 ## [0.0.18] - 2026-04-02
 
 ### Added
