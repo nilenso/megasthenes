@@ -40,7 +40,10 @@ eval/__pycache__/
 
 # Cloned repositories
 workdir
+
+## AGENTS
 AGENTS.local.md
+.claude/
 
 # Eval runs
 scripts/eval/reports/

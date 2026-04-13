@@ -40,17 +40,34 @@ When sandbox mode is enabled:
 
 ### Running the Sandbox Server
 
-The sandbox runs as an HTTP server. Start it with:
+Generate a docker-compose file and start the sandbox:
 
 ```bash
-bun run web/server.ts
+# Generate docker-compose.sandbox.yml
+bunx megasthenes setup-sandbox
+
+# Start the sandbox
+docker-compose -f docker-compose.sandbox.yml up -d
 ```
 
-Or via container:
+Prerequisites: Docker with [gVisor runtime](https://gvisor.dev/docs/user_guide/install/).
+
+The `setup-sandbox` command accepts configuration flags:
 
 ```bash
-podman run -p 8080:8080 megasthenes-sandbox
+bunx megasthenes setup-sandbox \
+  --port 9090 \
+  --generate-secret \
+  --output ./docker-compose.sandbox.yml
 ```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port` | 8080 | Host port to expose |
+| `--secret` | (none) | Bearer token for API authentication |
+| `--generate-secret` | — | Generate a random 32-char hex secret |
+| `--output` | `./docker-compose.sandbox.yml` | Output file path |
+| `--image-tag` | Library version | Container image tag |
 
 ### Resetting the Sandbox
 

@@ -1,5 +1,8 @@
 {
 	"name": "megasthenes",
+	"bin": {
+		"megasthenes": "src/cli/index.ts"
+	},
 	"module": "src/index.ts",
 	"type": "module",
 	"scripts": {

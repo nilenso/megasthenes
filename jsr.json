@@ -2,7 +2,10 @@
 	"name": "@nilenso/megasthenes",
 	"version": "0.0.18",
 	"license": "MIT",
-	"exports": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./cli": "./src/cli/index.ts"
+	},
 	"exclude": [
 		"docs/",
 		"scripts/",
