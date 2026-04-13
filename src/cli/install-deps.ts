@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { platform } from "node:os";
 
+type DependencyName = "git" | "ripgrep" | "fd";
+
 interface Dependency {
-	name: string;
+	name: DependencyName;
 	command: string;
 	versionFlag: string;
 }
@@ -15,7 +17,7 @@ const dependencies: Dependency[] = [
 
 type PackageManager = "brew" | "apt" | "dnf" | "pacman" | "apk";
 
-const installCommands: Record<PackageManager, Record<string, string>> = {
+const installCommands: Record<PackageManager, Record<DependencyName, string>> = {
 	brew: { git: "git", ripgrep: "ripgrep", fd: "fd" },
 	apt: { git: "git", ripgrep: "ripgrep", fd: "fd-find" },
 	dnf: { git: "git", ripgrep: "ripgrep", fd: "fd-find" },
