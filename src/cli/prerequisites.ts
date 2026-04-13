@@ -50,15 +50,11 @@ export function checkPlatform(): boolean {
 }
 
 export function checkSandboxPrerequisites(): void {
-	const isLinux = platform() === "linux";
-	if (!isLinux) {
-		checkPlatform();
-	}
+	if (!checkPlatform()) return;
+
 	const hasDocker = checkDocker();
-	if (hasDocker) {
-		checkDockerCompose();
-		if (isLinux) {
-			checkGvisor();
-		}
-	}
+	if (!hasDocker) return;
+
+	checkDockerCompose();
+	checkGvisor();
 }
