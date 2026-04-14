@@ -303,7 +303,8 @@ describe("compact", () => {
 		expect(result.keptMessages[0]).toBe(messages[result.firstKeptIndex]);
 		const firstKept = result.keptMessages[0];
 		expect(firstKept).toBeDefined();
-		expect(["user", "assistant"]).toContain(firstKept?.role);
+		if (!firstKept) throw new Error("Missing kept message");
+		expect(["user", "assistant"]).toContain(firstKept.role);
 	});
 
 	test("returns original messages when nothing to compact", async () => {
@@ -329,6 +330,20 @@ describe("maybeCompact", () => {
 		expect(result.messages).toBe(messages);
 	});
 
+	test("metadata remains consistent on non-compacting path", async () => {
+		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
+		const expectedTokens = estimateContextTokens(messages);
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(false);
+		expect(result.firstKeptOrdinal).toBe(0);
+		expect(result.tokensBefore).toBe(expectedTokens);
+		expect(result.tokensAfter).toBe(expectedTokens);
+		expect(result.readFiles).toEqual([]);
+		expect(result.modifiedFiles).toEqual([]);
+	});
+
 	test("returns wasCompacted=true with summary prepended when over threshold", async () => {
 		const messages = makeLargeConversation(200, 4000);
 
@@ -342,6 +357,23 @@ describe("maybeCompact", () => {
 		expect(firstMsg?.content as string).toContain("[END CONTEXT SUMMARY");
 		expect(result.messages.length).toBeLessThan(messages.length);
 		expect((result.summary ?? "").length).toBeGreaterThan(0);
+	});
+
+	test("preserves suffix and metadata on compacting path", async () => {
+		const messages = makeLargeConversation(200, 4000);
+		const expectedTokens = estimateContextTokens(messages);
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(true);
+		expect(result.firstKeptOrdinal).toBeGreaterThan(0);
+		expect(result.tokensBefore).toBe(expectedTokens);
+		expect(result.tokensAfter).toBeLessThan(result.tokensBefore);
+		const firstMsg = result.messages[0];
+		expect(firstMsg).toBeDefined();
+		expect(firstMsg?.role).toBe("user");
+		expect(typeof firstMsg?.content).toBe("string");
+		expect(result.messages.slice(1)).toEqual(messages.slice(result.firstKeptOrdinal));
 	});
 
 	test("passes previousSummary through when under threshold", async () => {

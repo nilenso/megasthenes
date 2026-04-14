@@ -16,6 +16,15 @@ export function getCompactionSettings(): CompactionSettings {
 	return { ...COMPACTION_SETTINGS };
 }
 
+interface TokenEstimateIndex {
+	perMessage: number[];
+	prefixSums: number[];
+	total: number;
+}
+
+// Messages are treated as immutable during compaction, so object identity is a safe cache key.
+const messageTokenEstimateCache = new WeakMap<Message, number>();
+
 // =============================================================================
 // Token Estimation
 // =============================================================================
@@ -69,15 +78,46 @@ export function estimateTokens(message: Message): number {
 	return 0;
 }
 
+function estimateTokensCached(message: Message): number {
+	const cached = messageTokenEstimateCache.get(message);
+	if (cached !== undefined) {
+		return cached;
+	}
+
+	const tokens = estimateTokens(message);
+	messageTokenEstimateCache.set(message, tokens);
+	return tokens;
+}
+
+function buildTokenEstimateIndex(messages: Message[]): TokenEstimateIndex {
+	const perMessage: number[] = [];
+	const prefixSums = [0];
+	let total = 0;
+
+	for (const message of messages) {
+		const tokens = estimateTokensCached(message);
+		perMessage.push(tokens);
+		total += tokens;
+		prefixSums.push(total);
+	}
+
+	return { perMessage, prefixSums, total };
+}
+
+function sumIndexedTokens(tokenIndex: TokenEstimateIndex, start: number, end: number): number {
+	const startSum = tokenIndex.prefixSums[start];
+	const endSum = tokenIndex.prefixSums[end];
+	if (startSum === undefined || endSum === undefined) {
+		throw new Error(`Invalid token index range: ${start}-${end}`);
+	}
+	return endSum - startSum;
+}
+
 /**
  * Estimate total context tokens from messages.
  */
 export function estimateContextTokens(messages: Message[]): number {
-	let total = 0;
-	for (const message of messages) {
-		total += estimateTokens(message);
-	}
-	return total;
+	return buildTokenEstimateIndex(messages).total;
 }
 
 /**
@@ -271,7 +311,11 @@ function findTurnStartIndex(messages: Message[], entryIndex: number): number {
  * Can cut at user OR assistant messages. When cutting at an assistant message,
  * we're splitting a turn and need to summarize the turn prefix separately.
  */
-export function findCutPoint(messages: Message[], settings: CompactionSettings = COMPACTION_SETTINGS): CutPointResult {
+function findCutPointFromIndex(
+	messages: Message[],
+	settings: CompactionSettings,
+	tokenIndex: TokenEstimateIndex,
+): CutPointResult {
 	const { keepRecentTokens } = settings;
 
 	const cutPoints = findValidCutPoints(messages);
@@ -311,14 +355,12 @@ export function findCutPoint(messages: Message[], settings: CompactionSettings =
 		// We can potentially split within the single turn
 	}
 
-	// Walk backwards, accumulating tokens until we hit the budget
+	// Reuse indexed token estimates so cut-point selection does not rescan messages.
 	let accumulatedTokens = 0;
 	let cutIndex = 0;
 
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const msg = messages[i];
-		if (!msg) continue;
-		accumulatedTokens += estimateTokens(msg);
+		accumulatedTokens += tokenIndex.perMessage[i] ?? 0;
 
 		if (accumulatedTokens >= keepRecentTokens) {
 			// Find nearest valid cut point at or after this index
@@ -371,6 +413,10 @@ export function findCutPoint(messages: Message[], settings: CompactionSettings =
 		isSplitTurn: false,
 		turnStartIndex: -1,
 	};
+}
+
+export function findCutPoint(messages: Message[], settings: CompactionSettings = COMPACTION_SETTINGS): CutPointResult {
+	return findCutPointFromIndex(messages, settings, buildTokenEstimateIndex(messages));
 }
 
 // =============================================================================
@@ -552,21 +598,25 @@ async function generateTurnPrefixSummary(
 	return text || "";
 }
 
-/**
- * Perform compaction on messages.
- * Returns the summary and the messages to keep.
- */
-export async function compact(
+function createSummaryWrapperMessage(summary: string): Message {
+	return {
+		role: "user",
+		content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
+		timestamp: Date.now(),
+	};
+}
+
+async function compactWithTokenIndex(
 	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
 	model: Model<any>,
 	messages: Message[],
-	previousSummary?: string,
-	signal?: AbortSignal,
+	previousSummary: string | undefined,
+	signal: AbortSignal | undefined,
+	tokenIndex: TokenEstimateIndex,
 ): Promise<CompactionResult> {
 	const settings = getCompactionSettings();
-	const tokensBefore = estimateContextTokens(messages);
-
-	const cutPoint = findCutPoint(messages, settings);
+	const tokensBefore = tokenIndex.total;
+	const cutPoint = findCutPointFromIndex(messages, settings, tokenIndex);
 
 	if (cutPoint.messagesToSummarize.length === 0 && cutPoint.turnPrefixMessages.length === 0) {
 		// Nothing to compact
@@ -581,7 +631,7 @@ export async function compact(
 		};
 	}
 
-	// Extract file operations from all messages being summarized
+	// Extract file operations from all messages being summarized.
 	const fileOps = createFileOps();
 	for (const msg of cutPoint.messagesToSummarize) {
 		extractFileOpsFromMessage(msg, fileOps);
@@ -591,11 +641,11 @@ export async function compact(
 	}
 	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
 
-	// Generate summary/summaries
+	// Generate summary/summaries.
 	let summary: string;
 
 	if (cutPoint.isSplitTurn && cutPoint.turnPrefixMessages.length > 0) {
-		// Split turn: generate both summaries in parallel and merge
+		// Split turn: generate both summaries in parallel and merge.
 		const [historyResult, turnPrefixResult] = await Promise.all([
 			cutPoint.messagesToSummarize.length > 0
 				? generateSummary(model, cutPoint.messagesToSummarize, previousSummary, signal)
@@ -603,22 +653,19 @@ export async function compact(
 			generateTurnPrefixSummary(model, cutPoint.turnPrefixMessages, signal),
 		]);
 
-		// Merge into single summary
+		// Merge into single summary.
 		summary = `${historyResult}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult}`;
 	} else {
-		// Normal case: just generate history summary
+		// Normal case: just generate history summary.
 		summary = await generateSummary(model, cutPoint.messagesToSummarize, previousSummary, signal);
 	}
 
-	// Append file operations to summary
+	// Append file operations to summary.
 	summary += formatFileOperations(readFiles, modifiedFiles);
 
-	const tokensAfter =
-		estimateTokens({
-			role: "user",
-			content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
-			timestamp: Date.now(),
-		}) + estimateContextTokens(cutPoint.messagesToKeep);
+	const keptTokens = sumIndexedTokens(tokenIndex, cutPoint.firstKeptIndex, messages.length);
+	const summaryMessage = createSummaryWrapperMessage(summary);
+	const tokensAfter = estimateTokensCached(summaryMessage) + keptTokens;
 
 	return {
 		summary,
@@ -629,6 +676,20 @@ export async function compact(
 		readFiles,
 		modifiedFiles,
 	};
+}
+
+/**
+ * Perform compaction on messages.
+ * Returns the summary and the messages to keep.
+ */
+export async function compact(
+	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
+	model: Model<any>,
+	messages: Message[],
+	previousSummary?: string,
+	signal?: AbortSignal,
+): Promise<CompactionResult> {
+	return compactWithTokenIndex(model, messages, previousSummary, signal, buildTokenEstimateIndex(messages));
 }
 
 export interface MaybeCompactResult {
@@ -655,7 +716,8 @@ export async function maybeCompact(
 	signal?: AbortSignal,
 ): Promise<MaybeCompactResult> {
 	const settings = getCompactionSettings();
-	const contextTokens = estimateContextTokens(messages);
+	const tokenIndex = buildTokenEstimateIndex(messages);
+	const contextTokens = tokenIndex.total;
 
 	if (!shouldCompact(contextTokens, settings)) {
 		return {
@@ -670,17 +732,8 @@ export async function maybeCompact(
 		};
 	}
 
-	const result = await compact(model, messages, previousSummary, signal);
-
-	// Return summary message + kept messages
-	const compactedMessages = [
-		{
-			role: "user" as const,
-			content: `[CONTEXT SUMMARY - Previous conversation was compacted]\n\n${result.summary}\n\n[END CONTEXT SUMMARY - Continue from here]`,
-			timestamp: Date.now(),
-		},
-		...result.keptMessages,
-	];
+	const result = await compactWithTokenIndex(model, messages, previousSummary, signal, tokenIndex);
+	const compactedMessages = [createSummaryWrapperMessage(result.summary), ...result.keptMessages];
 
 	return {
 		messages: compactedMessages,
