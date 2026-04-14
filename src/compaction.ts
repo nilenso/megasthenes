@@ -419,6 +419,12 @@ export function findCutPoint(messages: Message[], settings: CompactionSettings =
 	return findCutPointFromIndex(messages, settings, buildTokenEstimateIndex(messages));
 }
 
+// Expose internals so regression tests can lock down refactor invariants directly.
+export const compactionTestInternals = {
+	buildTokenEstimateIndex,
+	findCutPointFromIndex,
+};
+
 // =============================================================================
 // Summary Generation
 // =============================================================================

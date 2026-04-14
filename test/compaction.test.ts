@@ -25,6 +25,7 @@ mock.module("@mariozechner/pi-ai", () => ({
 
 import {
 	compact,
+	compactionTestInternals,
 	estimateContextTokens,
 	estimateTokens,
 	findCutPoint,
@@ -130,6 +131,18 @@ describe("estimateContextTokens", () => {
 		if (!msg0 || !msg1) throw new Error("Messages not found");
 		expect(total).toBe(estimateTokens(msg0) + estimateTokens(msg1));
 	});
+
+	test("matches the token index total", () => {
+		const messages: Message[] = [
+			makeUserMessage("Hello"),
+			makeAssistantMessage("Hi there!"),
+			makeAssistantWithToolCall("read", { path: "/src/config.ts" }),
+		];
+
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+
+		expect(tokenIndex.total).toBe(estimateContextTokens(messages));
+	});
 });
 
 describe("shouldCompact", () => {
@@ -203,6 +216,23 @@ describe("serializeConversation", () => {
 });
 
 describe("findCutPoint", () => {
+	test("matches indexed cut point selection", () => {
+		const messages: Message[] = [
+			makeUserMessage("First question"),
+			makeAssistantMessage("First answer"),
+			makeUserMessage(`Second question with ${"x".repeat(1000)}`),
+			makeAssistantMessage(`Second answer part 1 ${"y".repeat(500)}`),
+			makeAssistantMessage(`Second answer part 2 ${"z".repeat(500)}`),
+		];
+		const settings = { ...getCompactionSettings(), keepRecentTokens: 300 };
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+
+		const directResult = findCutPoint(messages, settings);
+		const indexedResult = compactionTestInternals.findCutPointFromIndex(messages, settings, tokenIndex);
+
+		expect(indexedResult).toEqual(directResult);
+	});
+
 	test("returns all messages if under budget", () => {
 		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
 
