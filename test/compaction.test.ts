@@ -25,6 +25,7 @@ mock.module("@mariozechner/pi-ai", () => ({
 
 import {
 	compact,
+	compactionTestInternals,
 	estimateContextTokens,
 	estimateTokens,
 	findCutPoint,
@@ -130,6 +131,37 @@ describe("estimateContextTokens", () => {
 		if (!msg0 || !msg1) throw new Error("Messages not found");
 		expect(total).toBe(estimateTokens(msg0) + estimateTokens(msg1));
 	});
+
+	test("matches the token index total", () => {
+		const messages: Message[] = [
+			makeUserMessage("Hello"),
+			makeAssistantMessage("Hi there!"),
+			makeAssistantWithToolCall("read", { path: "/src/config.ts" }),
+		];
+
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+
+		expect(tokenIndex.total).toBe(estimateContextTokens(messages));
+	});
+
+	test("sumIndexedTokens uses slice-style [start, end) boundaries", () => {
+		const messages: Message[] = [
+			makeUserMessage("Hello"),
+			makeAssistantMessage("Hi there!"),
+			makeAssistantWithToolCall("read", { path: "/src/config.ts" }),
+		];
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+		const msg0 = messages[0];
+		const msg1 = messages[1];
+		const msg2 = messages[2];
+		if (!msg0 || !msg1 || !msg2) throw new Error("Messages not found");
+
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 0, 0)).toBe(0);
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 0, messages.length)).toBe(tokenIndex.total);
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 1, 3)).toBe(
+			estimateTokens(msg1) + estimateTokens(msg2),
+		);
+	});
 });
 
 describe("shouldCompact", () => {
@@ -203,6 +235,23 @@ describe("serializeConversation", () => {
 });
 
 describe("findCutPoint", () => {
+	test("matches indexed cut point selection", () => {
+		const messages: Message[] = [
+			makeUserMessage("First question"),
+			makeAssistantMessage("First answer"),
+			makeUserMessage(`Second question with ${"x".repeat(1000)}`),
+			makeAssistantMessage(`Second answer part 1 ${"y".repeat(500)}`),
+			makeAssistantMessage(`Second answer part 2 ${"z".repeat(500)}`),
+		];
+		const settings = { ...getCompactionSettings(), keepRecentTokens: 300 };
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+
+		const directResult = findCutPoint(messages, settings);
+		const indexedResult = compactionTestInternals.findCutPointFromIndex(messages, settings, tokenIndex);
+
+		expect(indexedResult).toEqual(directResult);
+	});
+
 	test("returns all messages if under budget", () => {
 		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
 
@@ -303,7 +352,8 @@ describe("compact", () => {
 		expect(result.keptMessages[0]).toBe(messages[result.firstKeptIndex]);
 		const firstKept = result.keptMessages[0];
 		expect(firstKept).toBeDefined();
-		expect(["user", "assistant"]).toContain(firstKept?.role);
+		if (!firstKept) throw new Error("Missing kept message");
+		expect(["user", "assistant"]).toContain(firstKept.role);
 	});
 
 	test("returns original messages when nothing to compact", async () => {
@@ -329,6 +379,20 @@ describe("maybeCompact", () => {
 		expect(result.messages).toBe(messages);
 	});
 
+	test("metadata remains consistent on non-compacting path", async () => {
+		const messages: Message[] = [makeUserMessage("Hello"), makeAssistantMessage("Hi!")];
+		const expectedTokens = estimateContextTokens(messages);
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(false);
+		expect(result.firstKeptOrdinal).toBe(0);
+		expect(result.tokensBefore).toBe(expectedTokens);
+		expect(result.tokensAfter).toBe(expectedTokens);
+		expect(result.readFiles).toEqual([]);
+		expect(result.modifiedFiles).toEqual([]);
+	});
+
 	test("returns wasCompacted=true with summary prepended when over threshold", async () => {
 		const messages = makeLargeConversation(200, 4000);
 
@@ -342,6 +406,23 @@ describe("maybeCompact", () => {
 		expect(firstMsg?.content as string).toContain("[END CONTEXT SUMMARY");
 		expect(result.messages.length).toBeLessThan(messages.length);
 		expect((result.summary ?? "").length).toBeGreaterThan(0);
+	});
+
+	test("preserves suffix and metadata on compacting path", async () => {
+		const messages = makeLargeConversation(200, 4000);
+		const expectedTokens = estimateContextTokens(messages);
+
+		const result = await maybeCompact(mockModel, messages);
+
+		expect(result.wasCompacted).toBe(true);
+		expect(result.firstKeptOrdinal).toBeGreaterThan(0);
+		expect(result.tokensBefore).toBe(expectedTokens);
+		expect(result.tokensAfter).toBeLessThan(result.tokensBefore);
+		const firstMsg = result.messages[0];
+		expect(firstMsg).toBeDefined();
+		expect(firstMsg?.role).toBe("user");
+		expect(typeof firstMsg?.content).toBe("string");
+		expect(result.messages.slice(1)).toEqual(messages.slice(result.firstKeptOrdinal));
 	});
 
 	test("passes previousSummary through when under threshold", async () => {
