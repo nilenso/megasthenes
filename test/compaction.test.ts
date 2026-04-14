@@ -143,6 +143,25 @@ describe("estimateContextTokens", () => {
 
 		expect(tokenIndex.total).toBe(estimateContextTokens(messages));
 	});
+
+	test("sumIndexedTokens uses slice-style [start, end) boundaries", () => {
+		const messages: Message[] = [
+			makeUserMessage("Hello"),
+			makeAssistantMessage("Hi there!"),
+			makeAssistantWithToolCall("read", { path: "/src/config.ts" }),
+		];
+		const tokenIndex = compactionTestInternals.buildTokenEstimateIndex(messages);
+		const msg0 = messages[0];
+		const msg1 = messages[1];
+		const msg2 = messages[2];
+		if (!msg0 || !msg1 || !msg2) throw new Error("Messages not found");
+
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 0, 0)).toBe(0);
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 0, messages.length)).toBe(tokenIndex.total);
+		expect(compactionTestInternals.sumIndexedTokens(tokenIndex, 1, 3)).toBe(
+			estimateTokens(msg1) + estimateTokens(msg2),
+		);
+	});
 });
 
 describe("shouldCompact", () => {

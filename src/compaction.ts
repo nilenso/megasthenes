@@ -18,6 +18,9 @@ export function getCompactionSettings(): CompactionSettings {
 
 interface TokenEstimateIndex {
 	perMessage: number[];
+	// prefixSums has length messages.length + 1 where prefixSums[i] is the
+	// token total for messages.slice(0, i). This makes slice sums [start, end)
+	// a simple subtraction and keeps empty ranges representable.
 	prefixSums: number[];
 	total: number;
 }
@@ -105,6 +108,7 @@ function buildTokenEstimateIndex(messages: Message[]): TokenEstimateIndex {
 }
 
 function sumIndexedTokens(tokenIndex: TokenEstimateIndex, start: number, end: number): number {
+	// prefix sums use [start, end) semantics, matching Array.prototype.slice.
 	const startSum = tokenIndex.prefixSums[start];
 	const endSum = tokenIndex.prefixSums[end];
 	if (startSum === undefined || endSum === undefined) {
@@ -423,6 +427,7 @@ export function findCutPoint(messages: Message[], settings: CompactionSettings =
 export const compactionTestInternals = {
 	buildTokenEstimateIndex,
 	findCutPointFromIndex,
+	sumIndexedTokens,
 };
 
 // =============================================================================
