@@ -30,7 +30,16 @@ import {
 	startToolSpan,
 } from "./tracing";
 import { reconstructContext } from "./turns-to-messages";
-import type { AskOptions, AskStream, ModelConfig, RepoConfig, StreamEvent, TokenUsage, TurnMetadata, TurnResult } from "./types";
+import type {
+	AskOptions,
+	AskStream,
+	ModelConfig,
+	RepoConfig,
+	StreamEvent,
+	TokenUsage,
+	TurnMetadata,
+	TurnResult,
+} from "./types";
 
 export type { Message };
 
@@ -346,7 +355,12 @@ export class Session {
 					yield { type: "error", message: "Aborted" };
 					endAskSpanWithError(askSpan, "aborted");
 					askSpanEnded = true;
-					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
+					yield {
+						type: "turn_end",
+						turnId,
+						metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
+						usage: this.#buildTurnUsage(totalUsage),
+					};
 					return;
 				}
 
@@ -377,7 +391,12 @@ export class Session {
 						yield event;
 						endAskSpanWithError(askSpan, "generation_failed", event.message);
 						askSpanEnded = true;
-						yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
+						yield {
+							type: "turn_end",
+							turnId,
+							metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
+							usage: this.#buildTurnUsage(totalUsage),
+						};
 						return;
 					}
 					yield event;
@@ -422,7 +441,12 @@ export class Session {
 					}
 					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
 					askSpanEnded = true;
-					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
+					yield {
+						type: "turn_end",
+						turnId,
+						metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
+						usage: this.#buildTurnUsage(totalUsage),
+					};
 					return;
 				}
 
@@ -443,7 +467,12 @@ export class Session {
 			yield { type: "error", message: "Max iterations reached without a final answer." };
 			endAskSpanWithError(askSpan, "max_iterations_reached");
 			askSpanEnded = true;
-			yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
+			yield {
+				type: "turn_end",
+				turnId,
+				metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
+				usage: this.#buildTurnUsage(totalUsage),
+			};
 		} catch (error) {
 			if (askSpan && !askSpanEnded) {
 				endAskSpanWithError(askSpan, "unexpected_error", error);
@@ -479,7 +508,12 @@ export class Session {
 		};
 	}
 
-	#buildTurnUsage(raw: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }): TokenUsage {
+	#buildTurnUsage(raw: {
+		inputTokens: number;
+		outputTokens: number;
+		cacheReadTokens: number;
+		cacheWriteTokens: number;
+	}): TokenUsage {
 		return {
 			inputTokens: raw.inputTokens,
 			outputTokens: raw.outputTokens,
