@@ -137,6 +137,50 @@ describe("AskStream", () => {
 		expect(result.steps[1]?.type).toBe("text");
 	});
 
+	test("concurrent iteration + .result() — result waits for iterator", async () => {
+		const events: StreamEvent[] = [
+			{ type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 },
+			{ type: "text", text: "A" },
+			{
+				type: "turn_end",
+				turnId: "t-1",
+				metadata: {
+					iterations: 1,
+					latencyMs: 50,
+					model: { provider: "test", id: "m" },
+					repo: { url: "", commitish: "" },
+					config: { maxIterations: 5 },
+				},
+			},
+		];
+
+		// Use a slow producer so iteration is still in progress when .result() is called
+		const stream = new AskStreamImpl(async function* () {
+			for (const event of events) {
+				await Bun.sleep(10);
+				yield event;
+			}
+		});
+
+		const collected: StreamEvent[] = [];
+		const iterPromise = (async () => {
+			for await (const event of stream) {
+				collected.push(event);
+			}
+		})();
+
+		// Call .result() while iteration is still in progress
+		const resultPromise = stream.result();
+
+		const [, result] = await Promise.all([iterPromise, resultPromise]);
+
+		// Iterator should have seen all events
+		expect(collected).toEqual(events);
+		// .result() should have the same data, built from the same builder
+		expect(result.id).toBe("t-1");
+		expect(result.steps[0]).toEqual({ type: "text", text: "A", role: "assistant" });
+	});
+
 	test("lazy start — producer not called until consumed", async () => {
 		let started = false;
 		const producer = async function* () {

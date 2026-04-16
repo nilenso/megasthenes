@@ -489,6 +489,147 @@ describe("Session", () => {
 		});
 	});
 
+	describe("tool-call ID correlation", () => {
+		test("tool_use_start, tool_use_end, and tool_result share consistent IDs across the stream", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls === 1) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "search results",
+				}),
+			);
+
+			const stream = session.ask("Search");
+			const events: import("../src/types").StreamEvent[] = [];
+			for await (const event of stream) {
+				events.push(event);
+			}
+
+			const toolStartEvents = events.filter((e) => e.type === "tool_use_start");
+			const toolEndEvents = events.filter((e) => e.type === "tool_use_end");
+			const toolResultEvents = events.filter((e) => e.type === "tool_result");
+
+			expect(toolStartEvents).toHaveLength(1);
+			expect(toolEndEvents).toHaveLength(1);
+			expect(toolResultEvents).toHaveLength(1);
+
+			// All three events should share the same toolCallId
+			const startId = (toolStartEvents[0] as import("../src/types").ToolUseStart).toolCallId;
+			const endId = (toolEndEvents[0] as import("../src/types").ToolUseEnd).toolCallId;
+			const resultId = (toolResultEvents[0] as import("../src/types").ToolResult).toolCallId;
+
+			expect(startId).toBe(endId);
+			expect(endId).toBe(resultId);
+
+			// And the TurnResult should have params populated
+			const result = await stream.result();
+			const toolStep = result.steps.find((s) => s.type === "tool_call");
+			expect(toolStep).toBeDefined();
+			if (toolStep?.type === "tool_call") {
+				expect(toolStep.params).toEqual({ pattern: "test" });
+				expect(toolStep.output).toBe("search results");
+			}
+		});
+	});
+
+	describe("usage and iteration tracking", () => {
+		test("TurnResult.usage reflects non-zero token counts from the response", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.ask("Hello").result();
+
+			// The mock response returns usage: { input: 10, output: 5, totalTokens: 15 }
+			expect(result.usage.inputTokens).toBe(10);
+			expect(result.usage.outputTokens).toBe(5);
+			expect(result.usage.totalTokens).toBe(15);
+		});
+
+		test("iteration_start steps are present in the TurnResult", async () => {
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.ask("Hello").result();
+
+			const iterSteps = result.steps.filter((s) => s.type === "iteration_start");
+			expect(iterSteps).toHaveLength(1);
+			if (iterSteps[0]?.type === "iteration_start") {
+				expect(iterSteps[0].index).toBe(0);
+			}
+		});
+
+		test("multi-iteration turn accumulates usage and iteration_start steps", async () => {
+			let streamCalls = 0;
+			const customStream = (() => {
+				streamCalls++;
+				if (streamCalls <= 2) {
+					return createToolCallStreamResult([{ name: "rg", arguments: { pattern: "test" } }]);
+				}
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["stream"];
+
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({
+					stream: customStream,
+					executeTool: async () => "result",
+				}),
+			);
+
+			const result = await session.ask("Multi").result();
+
+			// 3 iterations: 2 tool-call + 1 final text
+			const iterSteps = result.steps.filter((s) => s.type === "iteration_start");
+			expect(iterSteps).toHaveLength(3);
+			expect(iterSteps.map((s) => s.type === "iteration_start" && s.index)).toEqual([0, 1, 2]);
+
+			// Usage should be accumulated across all 3 iterations
+			expect(result.usage.inputTokens).toBeGreaterThan(0);
+			expect(result.usage.outputTokens).toBeGreaterThan(0);
+		});
+	});
+
+	describe("TurnMetadata reflects per-turn overrides", () => {
+		test("metadata.config.maxIterations matches the per-turn override", async () => {
+			const customStream = (() =>
+				createToolCallStreamResult([
+					{ name: "rg", arguments: { pattern: "test" } },
+				])) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ maxIterations: 10, stream: customStream }));
+			const result = await session.ask("Do something", { maxIterations: 1 }).result();
+
+			expect(result.metadata.config.maxIterations).toBe(1);
+		});
+
+		test("metadata.config.thinkingConfig matches the per-turn override", async () => {
+			const customStreamSimple = ((_model: unknown, _context: unknown, _options?: unknown) => {
+				return createMockStreamResult();
+			}) as unknown as SessionConfig["streamSimple"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ streamSimple: customStreamSimple }));
+			const result = await session.ask("Test", { thinking: { effort: "high" } }).result();
+
+			expect(result.metadata.config.thinkingConfig).toEqual({ effort: "high" });
+		});
+
+		test("metadata uses session defaults when no per-turn overrides are given", async () => {
+			const session = new Session(
+				createMockRepo(),
+				createMockConfig({ maxIterations: 7, thinking: { type: "adaptive" } }),
+			);
+			const result = await session.ask("Hello").result();
+
+			expect(result.metadata.config.maxIterations).toBe(7);
+			expect(result.metadata.config.thinkingConfig).toEqual({ type: "adaptive" });
+		});
+	});
+
 	describe("initialTurns", () => {
 		/** Helper to create a TurnResult for seeding. */
 		function makeSeedTurn(

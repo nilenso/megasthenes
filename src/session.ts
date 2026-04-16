@@ -30,7 +30,7 @@ import {
 	startToolSpan,
 } from "./tracing";
 import { reconstructContext } from "./turns-to-messages";
-import type { AskOptions, AskStream, ModelConfig, RepoConfig, StreamEvent, TurnMetadata, TurnResult } from "./types";
+import type { AskOptions, AskStream, ModelConfig, RepoConfig, StreamEvent, TokenUsage, TurnMetadata, TurnResult } from "./types";
 
 export type { Message };
 
@@ -260,7 +260,7 @@ export class Session {
 	): AsyncGenerator<StreamEvent> {
 		let askSpan: import("@opentelemetry/api").Span | undefined;
 		let askSpanEnded = false;
-		const totalUsage = { inputTokens: 0, outputTokens: 0 };
+		const totalUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 		let totalToolCalls = 0;
 
 		try {
@@ -281,12 +281,15 @@ export class Session {
 				return;
 			}
 
-			// Resolve model for this turn (per-turn override or session default)
+			// Resolve per-turn overrides (model, maxIterations, thinking)
 			const turnModel = options?.model
 				? (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(options.model.provider, options.model.id)
 				: this.#config.model;
+			const turnMaxIterations = options?.maxIterations ?? this.#config.maxIterations;
+			const turnThinking = options?.thinking ?? this.#config.thinking;
 
 			const modelId = `${turnModel.provider}/${turnModel.id}`;
+			const turnOverrides = { model: turnModel, maxIterations: turnMaxIterations, thinking: turnThinking };
 
 			const turnId = randomUUID();
 			const startedAt = Date.now();
@@ -302,13 +305,13 @@ export class Session {
 				systemPrompt: this.#context.systemPrompt,
 			});
 
-			// Compaction
+			// Compaction (uses the turn model, not the session default)
 			const newQuestionMessage: Message = { role: "user", content: prompt, timestamp: Date.now() };
 			const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
 
 			const compactionSpan = startCompactionSpan(askSpan);
 			try {
-				const compactionResult = await maybeCompact(this.#config.model, messagesWithQuestion, this.#compactionSummary);
+				const compactionResult = await maybeCompact(turnModel, messagesWithQuestion, this.#compactionSummary);
 				if (compactionResult.wasCompacted) {
 					this.#context.messages = compactionResult.messages;
 					this.#compactionSummary = compactionResult.summary;
@@ -335,20 +338,20 @@ export class Session {
 				endCompactionSpanWithError(compactionSpan, compactionError);
 			}
 
-			const maxIterations = options?.maxIterations ?? this.#config.maxIterations;
 			let iterations = 0;
 
-			for (let iteration = 0; iteration < maxIterations; iteration++) {
+			for (let iteration = 0; iteration < turnMaxIterations; iteration++) {
 				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
 					yield { type: "error", message: "Aborted" };
 					endAskSpanWithError(askSpan, "aborted");
 					askSpanEnded = true;
-					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
 					return;
 				}
 
 				iterations = iteration + 1;
+				yield { type: "iteration_start", index: iteration };
 
 				const genSpan = startGenerationSpan(askSpan, {
 					iteration: iterations,
@@ -357,7 +360,7 @@ export class Session {
 					messages: [...this.#context.messages],
 				});
 
-				const { streamFn, streamOptions } = this.#resolveStreamCall(options?.thinking);
+				const { streamFn, streamOptions } = this.#resolveStreamCall(turnThinking);
 				const { events, response: getResponse } = processStreamToEvents(
 					streamFn,
 					turnModel,
@@ -374,7 +377,7 @@ export class Session {
 						yield event;
 						endAskSpanWithError(askSpan, "generation_failed", event.message);
 						askSpanEnded = true;
-						yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+						yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
 						return;
 					}
 					yield event;
@@ -390,6 +393,8 @@ export class Session {
 				if (response.usage) {
 					totalUsage.inputTokens += response.usage.input ?? 0;
 					totalUsage.outputTokens += response.usage.output ?? 0;
+					totalUsage.cacheReadTokens += response.usage.cacheRead ?? 0;
+					totalUsage.cacheWriteTokens += response.usage.cacheWrite ?? 0;
 				}
 
 				// Check if we have tool calls
@@ -417,7 +422,7 @@ export class Session {
 					}
 					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
 					askSpanEnded = true;
-					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+					yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
 					return;
 				}
 
@@ -438,7 +443,7 @@ export class Session {
 			yield { type: "error", message: "Max iterations reached without a final answer." };
 			endAskSpanWithError(askSpan, "max_iterations_reached");
 			askSpanEnded = true;
-			yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt) };
+			yield { type: "turn_end", turnId, metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides), usage: this.#buildTurnUsage(totalUsage) };
 		} catch (error) {
 			if (askSpan && !askSpanEnded) {
 				endAskSpanWithError(askSpan, "unexpected_error", error);
@@ -453,16 +458,34 @@ export class Session {
 		}
 	}
 
-	#buildTurnMetadata(iterations: number, startedAt: number): TurnMetadata {
+	#buildTurnMetadata(
+		iterations: number,
+		startedAt: number,
+		turnOverrides: {
+			model: Model<Api>;
+			maxIterations: number;
+			thinking?: ThinkingConfig;
+		},
+	): TurnMetadata {
 		return {
 			iterations,
 			latencyMs: Date.now() - startedAt,
-			model: { provider: String(this.#config.model.provider), id: String(this.#config.model.id) },
+			model: { provider: String(turnOverrides.model.provider), id: String(turnOverrides.model.id) },
 			repo: { url: this.repo.url, commitish: this.repo.commitish },
 			config: {
-				maxIterations: this.#config.maxIterations,
-				thinkingConfig: this.#config.thinking,
+				maxIterations: turnOverrides.maxIterations,
+				thinkingConfig: turnOverrides.thinking,
 			},
+		};
+	}
+
+	#buildTurnUsage(raw: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }): TokenUsage {
+		return {
+			inputTokens: raw.inputTokens,
+			outputTokens: raw.outputTokens,
+			totalTokens: raw.inputTokens + raw.outputTokens,
+			cacheReadTokens: raw.cacheReadTokens,
+			cacheWriteTokens: raw.cacheWriteTokens,
 		};
 	}
 
@@ -505,9 +528,12 @@ export class Session {
 				timestamp: Date.now(),
 			});
 
+			// Use index-based ID to match tool_use_start/tool_use_end from the
+			// stream processor (which uses String(contentIndex)). The context
+			// message above keeps call.id for the LLM provider.
 			yield {
 				type: "tool_result",
-				toolCallId: call.id,
+				toolCallId: String(j),
 				name: call.name,
 				output: r.text,
 				isError: r.isError,

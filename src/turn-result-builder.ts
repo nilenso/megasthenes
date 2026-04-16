@@ -46,6 +46,15 @@ export class TurnResultBuilder {
 			case "turn_end":
 				this.#endedAt = Date.now();
 				this.#metadata = event.metadata;
+				if (event.usage) {
+					this.#usage = {
+						inputTokens: event.usage.inputTokens,
+						outputTokens: event.usage.outputTokens,
+						totalTokens: event.usage.totalTokens,
+						cacheReadTokens: event.usage.cacheReadTokens,
+						cacheWriteTokens: event.usage.cacheWriteTokens,
+					};
+				}
 				break;
 
 			// --- Content completion events become steps ---
@@ -60,6 +69,12 @@ export class TurnResultBuilder {
 
 			case "text":
 				this.#steps.push({ type: "text", text: event.text, role: "assistant" });
+				break;
+
+			// --- Iteration lifecycle ---
+
+			case "iteration_start":
+				this.#steps.push({ type: "iteration_start", index: event.index });
 				break;
 
 			// --- Streaming deltas are not steps (they're intermediate) ---

@@ -16,10 +16,17 @@ export class AskStreamImpl implements AskStream {
 	#resultPromise: Promise<TurnResult> | null = null;
 	#builder = new TurnResultBuilder();
 	#done = false;
+	/** True once either the iterator or #resolveResult has started draining the generator. */
+	#consuming = false;
+	#doneResolve!: () => void;
+	#donePromise: Promise<void>;
 
 	constructor(producer: () => AsyncGenerator<StreamEvent>, onComplete?: (result: TurnResult) => void) {
 		this.#producer = producer;
 		this.#onComplete = onComplete;
+		this.#donePromise = new Promise<void>((resolve) => {
+			this.#doneResolve = resolve;
+		});
 	}
 
 	#ensureStarted(): AsyncGenerator<StreamEvent> {
@@ -30,6 +37,10 @@ export class AskStreamImpl implements AskStream {
 	}
 
 	async *[Symbol.asyncIterator](): AsyncIterator<StreamEvent> {
+		if (this.#consuming) {
+			throw new Error("AskStream is already being consumed");
+		}
+		this.#consuming = true;
 		const gen = this.#ensureStarted();
 
 		for await (const event of gen) {
@@ -53,6 +64,7 @@ export class AskStreamImpl implements AskStream {
 		const result = this.#builder.build();
 		this.#onComplete?.(result);
 		this.#onComplete = undefined;
+		this.#doneResolve();
 	}
 
 	async #resolveResult(): Promise<TurnResult> {
@@ -60,7 +72,15 @@ export class AskStreamImpl implements AskStream {
 			return this.#builder.build();
 		}
 
-		// Drain the stream if not already iterated
+		// If iteration is already draining the generator, wait for it to finish
+		// rather than racing to consume the same events.
+		if (this.#consuming) {
+			await this.#donePromise;
+			return this.#builder.build();
+		}
+
+		// Nobody is iterating — drain the stream ourselves
+		this.#consuming = true;
 		const gen = this.#ensureStarted();
 		for await (const event of gen) {
 			this.#builder.process(event);

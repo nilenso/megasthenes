@@ -29,6 +29,8 @@ export interface TurnEnd {
 	type: "turn_end";
 	turnId: string;
 	metadata: TurnMetadata;
+	/** Accumulated token usage across all iterations in this turn. */
+	usage?: TokenUsage;
 }
 
 // --- Content generation ---
@@ -125,6 +127,17 @@ export interface Compaction {
 
 // --- Errors ---
 
+// --- Iteration lifecycle ---
+
+/** Emitted at the start of each LLM inference iteration within a turn. */
+export interface IterationStart {
+	type: "iteration_start";
+	/** Zero-based iteration index. */
+	index: number;
+}
+
+// --- Errors ---
+
 /** An unrecoverable error occurred during the turn. */
 export interface TurnError {
 	type: "error";
@@ -150,6 +163,7 @@ export type StreamEvent =
 	| ToolUseDelta
 	| ToolUseEnd
 	| ToolResult
+	| IterationStart
 	| Compaction
 	| TurnError;
 
