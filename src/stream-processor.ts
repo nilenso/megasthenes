@@ -1,4 +1,5 @@
 import type { Api, AssistantMessage, AssistantMessageEventStream, Context, Model } from "@mariozechner/pi-ai";
+import { classifyProviderError, classifyThrownError } from "./error-classification";
 import type { StreamEvent } from "./types";
 
 // =============================================================================
@@ -85,6 +86,7 @@ export function processStreamToEvents(
 	model: Model<Api>,
 	context: Context,
 	streamOptions?: Record<string, unknown>,
+	contextWindow?: number,
 ): StreamToEventsResult {
 	let eventStream: AssistantMessageEventStream;
 
@@ -171,7 +173,14 @@ export function processStreamToEvents(
 
 					case "error": {
 						const errorText = extractErrorText(event.error);
-						yield { type: "error", message: `API call failed: ${errorText}`, details: event.error };
+						const classified = classifyProviderError(event.error as AssistantMessage, contextWindow);
+						yield {
+							type: "error",
+							code: classified.code,
+							message: `API call failed: ${errorText}`,
+							isRetryable: classified.isRetryable,
+							details: event.error,
+						};
 						return;
 					}
 
@@ -190,7 +199,14 @@ export function processStreamToEvents(
 			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			yield { type: "error", message: `API call failed: ${errorMessage}`, details: error };
+			const classified = classifyThrownError(error);
+			yield {
+				type: "error",
+				code: classified.code,
+				message: `API call failed: ${errorMessage}`,
+				isRetryable: classified.isRetryable,
+				details: error,
+			};
 		}
 	}
 

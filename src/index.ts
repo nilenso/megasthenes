@@ -1,5 +1,6 @@
 import { getModel, type KnownProvider, type Message, stream, streamSimple } from "@mariozechner/pi-ai";
 import type { CompactionSettings, ThinkingConfig } from "./config";
+import { MegasthenesError } from "./errors";
 import { type ConnectOptions, connectRepo, type Forge, type ForgeName, type Repo } from "./forge";
 import { consoleLogger, type Logger, nullLogger } from "./logger";
 import { buildDefaultSystemPrompt } from "./prompt";
@@ -9,6 +10,7 @@ import { executeTool, tools } from "./tools";
 import type {
 	AskOptions,
 	AskStream,
+	ErrorType,
 	ModelConfig,
 	RepoConfig,
 	Step,
@@ -23,6 +25,7 @@ export type {
 	AskOptions,
 	AskStream,
 	CompactionSettings,
+	ErrorType,
 	Forge,
 	ForgeName,
 	KnownProvider,
@@ -41,7 +44,7 @@ export type {
 	TurnMetadata,
 	TurnResult,
 };
-export { buildDefaultSystemPrompt, consoleLogger, nullLogger };
+export { buildDefaultSystemPrompt, consoleLogger, MegasthenesError, nullLogger };
 
 // =============================================================================
 // ClientConfig — infrastructure only

@@ -8,6 +8,23 @@
 import type { ThinkingConfig } from "./config";
 
 // =============================================================================
+// Error Codes
+// =============================================================================
+
+/**
+ * Programmatic error codes for all error paths in the library.
+ * Consumers can switch on this instead of string-matching messages.
+ */
+export type ErrorType =
+	| "aborted"
+	| "max_iterations"
+	| "context_overflow"
+	| "provider_error"
+	| "empty_response"
+	| "network_error"
+	| "internal_error";
+
+// =============================================================================
 // Stream Events
 // =============================================================================
 
@@ -125,8 +142,6 @@ export interface Compaction {
 	modifiedFiles: string[];
 }
 
-// --- Errors ---
-
 // --- Iteration lifecycle ---
 
 /** Emitted at the start of each LLM inference iteration within a turn. */
@@ -141,8 +156,12 @@ export interface IterationStart {
 /** An unrecoverable error occurred during the turn. */
 export interface TurnError {
 	type: "error";
+	/** Programmatic error code for switch/match. */
+	code: ErrorType;
 	/** Human-readable message. */
 	message: string;
+	/** Whether retrying might succeed. null = unknown (e.g., opaque provider errors). */
+	isRetryable: boolean | null;
 	/** Raw error details (for logging/debugging). */
 	details?: unknown;
 }
@@ -187,7 +206,16 @@ export type Step =
 	  }
 	| { type: "iteration_start"; index: number }
 	| { type: "compaction"; summary: string; tokensBefore: number; tokensAfter: number }
-	| { type: "error"; source: "provider" | "library"; message: string; details?: unknown; recoverable: boolean };
+	| {
+			type: "error";
+			code: ErrorType;
+			source: "provider" | "library";
+			message: string;
+			isRetryable: boolean | null;
+			details?: unknown;
+			/** @deprecated Use code + isRetryable instead. */
+			recoverable: boolean;
+	  };
 
 /** Token usage totals across all iterations in a turn. */
 export interface TokenUsage {
@@ -235,7 +263,12 @@ export interface TurnResult {
 	/** End-of-turn metadata. */
 	readonly metadata: TurnMetadata;
 	/** Non-null if the turn ended in an unrecoverable error. */
-	readonly error: { message: string; details?: unknown } | null;
+	readonly error: {
+		code: ErrorType;
+		message: string;
+		isRetryable: boolean | null;
+		details?: unknown;
+	} | null;
 	/** Epoch ms when this turn started. */
 	readonly startedAt: number;
 	/** Epoch ms when this turn ended. */

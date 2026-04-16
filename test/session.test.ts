@@ -630,6 +630,87 @@ describe("Session", () => {
 		});
 	});
 
+	describe("structured error codes", () => {
+		test("abort yields error with code 'aborted' and isRetryable false", async () => {
+			const controller = new AbortController();
+			controller.abort();
+
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.ask("Test", { signal: controller.signal }).result();
+
+			expect(result.error?.code).toBe("aborted");
+			expect(result.error?.isRetryable).toBe(false);
+		});
+
+		test("max iterations yields error with code 'max_iterations' and isRetryable false", async () => {
+			const customStream = (() =>
+				createToolCallStreamResult([
+					{ name: "rg", arguments: { pattern: "test" } },
+				])) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ maxIterations: 1, stream: customStream }));
+			const result = await session.ask("Do something").result();
+
+			expect(result.error?.code).toBe("max_iterations");
+			expect(result.error?.isRetryable).toBe(false);
+		});
+
+		test("provider error yields code 'provider_error'", async () => {
+			const customStream = (() => ({
+				[Symbol.asyncIterator]: async function* () {
+					yield { type: "error", error: { errorMessage: "API error" } };
+				},
+				result: async () => createMockStreamResult().result(),
+			})) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+			const result = await session.ask("Test").result();
+
+			expect(result.error?.code).toBe("provider_error");
+			expect(result.error?.isRetryable).toBeNull();
+		});
+
+		test("empty response yields code 'empty_response' and isRetryable true", async () => {
+			const customStream = (() => ({
+				[Symbol.asyncIterator]: async function* () {
+					yield { type: "text_delta", delta: "" };
+				},
+				result: async () => ({
+					role: "assistant" as const,
+					content: [{ type: "text" as const, text: "" }],
+					usage: { input: 10, output: 0, totalTokens: 10 },
+					timestamp: Date.now(),
+					api: "test",
+					provider: "test",
+					model: "test",
+					stopReason: "end_turn",
+				}),
+			})) as unknown as SessionConfig["stream"];
+
+			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+			const result = await session.ask("Test").result();
+
+			expect(result.error?.code).toBe("empty_response");
+			expect(result.error?.isRetryable).toBe(true);
+		});
+
+		test("error steps include code and source derived from code", async () => {
+			const controller = new AbortController();
+			controller.abort();
+
+			const session = new Session(createMockRepo(), createMockConfig());
+			const result = await session.ask("Test", { signal: controller.signal }).result();
+
+			const errorSteps = result.steps.filter((s) => s.type === "error");
+			expect(errorSteps).toHaveLength(1);
+			if (errorSteps[0]?.type === "error") {
+				expect(errorSteps[0].code).toBe("aborted");
+				expect(errorSteps[0].source).toBe("library");
+				expect(errorSteps[0].isRetryable).toBe(false);
+			}
+		});
+	});
+
 	describe("initialTurns", () => {
 		/** Helper to create a TurnResult for seeding. */
 		function makeSeedTurn(

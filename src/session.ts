@@ -12,6 +12,7 @@ import {
 import { AskStreamImpl } from "./ask-stream";
 import { type CompactionSettings, maybeCompact } from "./compaction";
 import type { ThinkingConfig } from "./config";
+import { MegasthenesError } from "./errors";
 import { cleanupWorktree, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { processStreamToEvents, type StreamFn } from "./stream-processor";
@@ -286,7 +287,7 @@ export class Session {
 
 			// Check for abort before starting
 			if (options?.signal?.aborted) {
-				yield { type: "error", message: "Aborted" };
+				yield { type: "error", code: "aborted", message: "Aborted", isRetryable: false };
 				return;
 			}
 
@@ -352,7 +353,7 @@ export class Session {
 			for (let iteration = 0; iteration < turnMaxIterations; iteration++) {
 				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
-					yield { type: "error", message: "Aborted" };
+					yield { type: "error", code: "aborted", message: "Aborted", isRetryable: false };
 					endAskSpanWithError(askSpan, "aborted");
 					askSpanEnded = true;
 					yield {
@@ -380,6 +381,7 @@ export class Session {
 					turnModel,
 					this.#context,
 					streamOptions,
+					turnModel.contextWindow,
 				);
 
 				// Yield all events from this iteration's LLM call
@@ -429,16 +431,30 @@ export class Session {
 
 					if (!responseText.trim()) {
 						endGenerationSpanWithError(genSpan, "Empty response from API");
-					} else {
-						endGenerationSpan(genSpan, {
-							output: response.content,
-							inputTokens: response.usage?.input ?? 0,
-							outputTokens: response.usage?.output ?? 0,
-							cacheReadTokens: response.usage?.cacheRead ?? 0,
-							cacheCreationTokens: response.usage?.cacheWrite ?? 0,
-							stopReason: (response as unknown as { stopReason?: string }).stopReason,
-						});
+						yield {
+							type: "error",
+							code: "empty_response",
+							message: "Model returned an empty response",
+							isRetryable: true,
+						};
+						endAskSpanWithError(askSpan, "empty_response");
+						askSpanEnded = true;
+						yield {
+							type: "turn_end",
+							turnId,
+							metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
+							usage: this.#buildTurnUsage(totalUsage),
+						};
+						return;
 					}
+					endGenerationSpan(genSpan, {
+						output: response.content,
+						inputTokens: response.usage?.input ?? 0,
+						outputTokens: response.usage?.output ?? 0,
+						cacheReadTokens: response.usage?.cacheRead ?? 0,
+						cacheCreationTokens: response.usage?.cacheWrite ?? 0,
+						stopReason: (response as unknown as { stopReason?: string }).stopReason,
+					});
 					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
 					askSpanEnded = true;
 					yield {
@@ -464,7 +480,12 @@ export class Session {
 			}
 
 			// Max iterations reached
-			yield { type: "error", message: "Max iterations reached without a final answer." };
+			yield {
+				type: "error",
+				code: "max_iterations",
+				message: "Max iterations reached without a final answer.",
+				isRetryable: false,
+			};
 			endAskSpanWithError(askSpan, "max_iterations_reached");
 			askSpanEnded = true;
 			yield {
@@ -478,7 +499,12 @@ export class Session {
 				endAskSpanWithError(askSpan, "unexpected_error", error);
 				askSpanEnded = true;
 			}
-			throw error;
+			if (error instanceof MegasthenesError) throw error;
+			throw new MegasthenesError("internal_error", "Unexpected error during turn", {
+				isRetryable: false,
+				details: error,
+				cause: error,
+			});
 		} finally {
 			if (askSpan && !askSpanEnded) {
 				endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: 0, usage: totalUsage });

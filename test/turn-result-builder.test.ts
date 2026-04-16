@@ -248,19 +248,29 @@ describe("TurnResultBuilder", () => {
 		test("error event sets .error on the result and adds an error step", () => {
 			const result = buildFromEvents([
 				{ type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 },
-				{ type: "error", message: "API call failed", details: { code: 500 } },
+				{
+					type: "error",
+					code: "provider_error",
+					message: "API call failed",
+					isRetryable: null,
+					details: { code: 500 },
+				},
 			]);
 
 			expect(result.error).not.toBeNull();
+			expect(result.error?.code).toBe("provider_error");
 			expect(result.error?.message).toBe("API call failed");
+			expect(result.error?.isRetryable).toBeNull();
 			expect(result.error?.details).toEqual({ code: 500 });
 
 			const errorSteps = result.steps.filter((s) => s.type === "error");
 			expect(errorSteps).toHaveLength(1);
 			expect(errorSteps[0]).toEqual({
 				type: "error",
+				code: "provider_error",
 				source: "provider",
 				message: "API call failed",
+				isRetryable: null,
 				details: { code: 500 },
 				recoverable: false,
 			});
@@ -268,19 +278,27 @@ describe("TurnResultBuilder", () => {
 
 		test("setError() sets turn-level error", () => {
 			const builder = new TurnResultBuilder();
-			builder.setError("Max iterations reached");
+			builder.setError("max_iterations", "Max iterations reached", false);
 
 			const result = builder.build();
-			expect(result.error).toEqual({ message: "Max iterations reached" });
+			expect(result.error).toEqual({
+				code: "max_iterations",
+				message: "Max iterations reached",
+				isRetryable: false,
+			});
 
 			const errorSteps = result.steps.filter((s) => s.type === "error");
 			expect(errorSteps).toHaveLength(1);
+			if (errorSteps[0]?.type === "error") {
+				expect(errorSteps[0].code).toBe("max_iterations");
+				expect(errorSteps[0].source).toBe("library");
+			}
 		});
 
 		test("error with preceding text preserves both as steps", () => {
 			const result = buildFromEvents([
 				{ type: "text", text: "partial" },
-				{ type: "error", message: "interrupted" },
+				{ type: "error", code: "provider_error", message: "interrupted", isRetryable: null },
 			]);
 
 			expect(result.steps).toHaveLength(2);

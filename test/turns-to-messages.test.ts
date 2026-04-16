@@ -79,7 +79,15 @@ describe("reconstructContext", () => {
 			prompt: "Search for bugs",
 			steps: [
 				{ type: "text", text: "I'll search.", role: "assistant" },
-				{ type: "tool_call", id: "tc1", name: "rg", params: { pattern: "bug" }, output: "found a bug", isError: false, durationMs: 50 },
+				{
+					type: "tool_call",
+					id: "tc1",
+					name: "rg",
+					params: { pattern: "bug" },
+					output: "found a bug",
+					isError: false,
+					durationMs: 50,
+				},
 				{ type: "text", text: "Found one.", role: "assistant" },
 			],
 			metadata: makeTurnMetadata({ iterations: 2 }),
@@ -120,9 +128,25 @@ describe("reconstructContext", () => {
 			prompt: "Find and read the config",
 			steps: [
 				{ type: "text", text: "I'll find the config.", role: "assistant" },
-				{ type: "tool_call", id: "tc1", name: "rg", params: { pattern: "config" }, output: "config.ts", isError: false, durationMs: 30 },
+				{
+					type: "tool_call",
+					id: "tc1",
+					name: "rg",
+					params: { pattern: "config" },
+					output: "config.ts",
+					isError: false,
+					durationMs: 30,
+				},
 				{ type: "text", text: "Let me read it.", role: "assistant" },
-				{ type: "tool_call", id: "tc2", name: "read", params: { path: "config.ts" }, output: "export default {}", isError: false, durationMs: 20 },
+				{
+					type: "tool_call",
+					id: "tc2",
+					name: "read",
+					params: { path: "config.ts" },
+					output: "export default {}",
+					isError: false,
+					durationMs: 20,
+				},
 				{ type: "text", text: "Here's the config.", role: "assistant" },
 			],
 			metadata: makeTurnMetadata({ iterations: 3 }),
@@ -213,7 +237,14 @@ describe("reconstructContext", () => {
 			steps: [
 				{ type: "compaction", summary: "Previous context...", tokensBefore: 5000, tokensAfter: 1000 },
 				{ type: "text", text: "Answer.", role: "assistant" },
-				{ type: "error", source: "provider", message: "Rate limited", recoverable: true },
+				{
+					type: "error",
+					code: "provider_error",
+					source: "provider",
+					message: "Rate limited",
+					isRetryable: null,
+					recoverable: true,
+				},
 			],
 		});
 
@@ -226,7 +257,15 @@ describe("reconstructContext", () => {
 			id: "t1",
 			prompt: "Read a file",
 			steps: [
-				{ type: "tool_call", id: "tc1", name: "read", params: { path: "/nope" }, output: "File not found", isError: true, durationMs: 10 },
+				{
+					type: "tool_call",
+					id: "tc1",
+					name: "read",
+					params: { path: "/nope" },
+					output: "File not found",
+					isError: true,
+					durationMs: 10,
+				},
 				{ type: "text", text: "Sorry, file not found.", role: "assistant" },
 			],
 		});
@@ -246,7 +285,15 @@ describe("reconstructContext", () => {
 			id: "t1",
 			prompt: "Do something",
 			steps: [
-				{ type: "tool_call", id: "tc1", name: "rg", params: { pattern: "x" }, output: "result", isError: false, durationMs: 10 },
+				{
+					type: "tool_call",
+					id: "tc1",
+					name: "rg",
+					params: { pattern: "x" },
+					output: "result",
+					isError: false,
+					durationMs: 10,
+				},
 			],
 		});
 
@@ -267,8 +314,24 @@ describe("reconstructContext", () => {
 			prompt: "Search for both",
 			steps: [
 				{ type: "text", text: "I'll search.", role: "assistant" },
-				{ type: "tool_call", id: "tc1", name: "rg", params: { pattern: "a" }, output: "found a", isError: false, durationMs: 10 },
-				{ type: "tool_call", id: "tc2", name: "rg", params: { pattern: "b" }, output: "found b", isError: false, durationMs: 10 },
+				{
+					type: "tool_call",
+					id: "tc1",
+					name: "rg",
+					params: { pattern: "a" },
+					output: "found a",
+					isError: false,
+					durationMs: 10,
+				},
+				{
+					type: "tool_call",
+					id: "tc2",
+					name: "rg",
+					params: { pattern: "b" },
+					output: "found b",
+					isError: false,
+					durationMs: 10,
+				},
 				{ type: "text", text: "Found both.", role: "assistant" },
 			],
 		});
@@ -306,10 +369,7 @@ describe("reconstructContext", () => {
 		const turn = makeTurn({
 			id: "t1",
 			prompt: "Test",
-			steps: [
-				{ type: "iteration_start", index: 0 } as Step,
-				{ type: "text", text: "Answer.", role: "assistant" },
-			],
+			steps: [{ type: "iteration_start", index: 0 } as Step, { type: "text", text: "Answer.", role: "assistant" }],
 		});
 
 		const { messages } = reconstructContext([turn]);
