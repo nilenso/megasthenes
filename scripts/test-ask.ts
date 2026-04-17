@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * CLI script to test the megasthenes ask() API.
  * Outputs JSON to stdout; progress/status to stderr.
@@ -22,8 +23,8 @@
  *   bun scripts/test-ask.ts file:///path/to/repo.git "Explain src/" --model claude-opus-4-6
  */
 
-import { Client, nullLogger, type SessionConfig } from "../src/index";
 import type { ThinkingConfig } from "../src/config";
+import { Client, nullLogger, type SessionConfig } from "../src/index";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -41,7 +42,7 @@ function flag(name: string): boolean {
 function option(name: string, fallback: string): string {
 	const i = args.indexOf(`--${name}`);
 	if (i === -1 || i + 1 >= args.length) return fallback;
-	const val = args[i + 1]!;
+	const val = args[i + 1] as string;
 	args.splice(i, 2);
 	return val;
 }
@@ -83,25 +84,21 @@ try {
 	console.log(`Session ${session.id} ready (commit: ${session.repo.commitish})`);
 	console.log(`Asking: ${prompt}\n`);
 
-	const signal = abortImmediate
-		? AbortSignal.abort()
-		: abortMs > 0
-			? AbortSignal.timeout(abortMs)
-			: undefined;
+	const signal = abortImmediate ? AbortSignal.abort() : abortMs > 0 ? AbortSignal.timeout(abortMs) : undefined;
 
 	const stream = session.ask(prompt, signal ? { signal } : undefined);
 
 	if (streamMode) {
 		for await (const event of stream) {
-			process.stdout.write(JSON.stringify(event) + "\n");
+			process.stdout.write(`${JSON.stringify(event)}\n`);
 		}
 	} else {
 		const result = await stream.result();
-		process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+		process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 	}
 
 	await session.close();
 } catch (err) {
-	process.stdout.write(JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2) + "\n");
+	process.stdout.write(`${JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2)}\n`);
 	process.exit(1);
 }

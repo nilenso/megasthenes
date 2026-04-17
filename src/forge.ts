@@ -170,9 +170,13 @@ export async function cleanupWorktree(repo: Repo): Promise<boolean> {
 export async function connectRepo(repoUrl: string, options: ConnectOptions = {}): Promise<Repo> {
 	const forgeName = options.forge ?? inferForge(repoUrl);
 	if (!forgeName) {
-		throw new MegasthenesError("invalid_config", `Cannot infer forge from URL: ${repoUrl}. Please specify 'forge' option.`, {
-			isRetryable: false,
-		});
+		throw new MegasthenesError(
+			"invalid_config",
+			`Cannot infer forge from URL: ${repoUrl}. Please specify 'forge' option.`,
+			{
+				isRetryable: false,
+			},
+		);
 	}
 
 	const forge = forges[forgeName];
