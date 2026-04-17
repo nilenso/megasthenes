@@ -165,13 +165,10 @@ export class SandboxClient {
 
 			const deadline = Date.now() + CLONE_POLL_TIMEOUT_MS;
 			let pollInterval = CLONE_POLL_INITIAL_INTERVAL_MS;
+			let lastStatus: string | undefined;
 			while (Date.now() < deadline) {
 				await Bun.sleep(pollInterval);
 				pollInterval = Math.min(pollInterval * 1.5, CLONE_POLL_MAX_INTERVAL_MS);
-				cloneSpan?.addEvent("sandbox.clone.poll", {
-					elapsed_ms: Date.now() - t0,
-					poll_interval_ms: pollInterval,
-				});
 
 				const statusRes = await fetch(
 					`${this.config.baseUrl}/clone/status/${slug}?commitish=${encodeURIComponent(commit)}`,
@@ -234,6 +231,15 @@ export class SandboxClient {
 					error?: string;
 					elapsedMs?: number;
 				};
+
+				if (statusBody.status !== lastStatus) {
+					cloneSpan?.addEvent("sandbox.clone.poll", {
+						elapsed_ms: Date.now() - t0,
+						status: statusBody.status ?? "unknown",
+						previous_status: lastStatus ?? "none",
+					});
+					lastStatus = statusBody.status;
+				}
 
 				if (statusBody.status === "ready" && statusBody.sha && statusBody.worktree) {
 					const duration = Date.now() - t0;
