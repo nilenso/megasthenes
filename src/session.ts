@@ -362,7 +362,7 @@ export class Session {
 				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
 					yield { type: "error", errorType: "aborted", message: "Aborted", isRetryable: false };
-					endAskSpanWithError(askSpan, "aborted");
+					endAskSpanWithError(askSpan, "aborted", "Aborted");
 					askSpanEnded = true;
 					yield {
 						type: "turn_end",
@@ -397,9 +397,13 @@ export class Session {
 				for await (const event of events) {
 					if (event.type === "error") {
 						hadError = true;
-						endGenerationSpanWithError(genSpan, event.message);
+						endGenerationSpanWithError(genSpan, {
+							errorType: event.errorType,
+							error: event.message,
+							fallbackMessage: event.message,
+						});
 						yield event;
-						endAskSpanWithError(askSpan, "generation_failed", event.message);
+						endAskSpanWithError(askSpan, event.errorType, event.message);
 						askSpanEnded = true;
 						yield {
 							type: "turn_end",
@@ -438,14 +442,19 @@ export class Session {
 					const responseText = textBlocks.map((b) => (b as { type: "text"; text: string }).text).join("\n");
 
 					if (!responseText.trim()) {
-						endGenerationSpanWithError(genSpan, "Empty response from API");
+						const emptyResponseMessage = "Model returned an empty response";
+						endGenerationSpanWithError(genSpan, {
+							errorType: "empty_response",
+							error: emptyResponseMessage,
+							fallbackMessage: emptyResponseMessage,
+						});
 						yield {
 							type: "error",
 							errorType: "empty_response",
-							message: "Model returned an empty response",
+							message: emptyResponseMessage,
 							isRetryable: true,
 						};
-						endAskSpanWithError(askSpan, "empty_response");
+						endAskSpanWithError(askSpan, "empty_response", emptyResponseMessage);
 						askSpanEnded = true;
 						yield {
 							type: "turn_end",
@@ -494,7 +503,7 @@ export class Session {
 				message: "Max iterations reached without a final answer.",
 				isRetryable: false,
 			};
-			endAskSpanWithError(askSpan, "max_iterations_reached");
+			endAskSpanWithError(askSpan, "max_iterations", "Max iterations reached without a final answer.");
 			askSpanEnded = true;
 			yield {
 				type: "turn_end",
@@ -504,7 +513,7 @@ export class Session {
 			};
 		} catch (error) {
 			if (askSpan && !askSpanEnded) {
-				endAskSpanWithError(askSpan, "unexpected_error", error);
+				endAskSpanWithError(askSpan, "internal_error", error);
 				askSpanEnded = true;
 			}
 			if (error instanceof MegasthenesError) throw error;

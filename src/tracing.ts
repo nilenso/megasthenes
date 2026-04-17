@@ -22,8 +22,11 @@
  * @see https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/
  */
 import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import type { ErrorType } from "./types";
 
 const tracer = trace.getTracer("megasthenes");
+
+type TraceErrorStage = "ask" | "generation" | "compaction" | "tool_execution";
 
 // =============================================================================
 // Attribute keys (GenAI semantic conventions + megasthenes extensions)
@@ -56,6 +59,7 @@ const ATTR = {
 	ERROR_TYPE: "error.type",
 	ERROR_NAME: "megasthenes.error.name",
 	ERROR_MESSAGE: "megasthenes.error.message",
+	ERROR_STAGE: "megasthenes.error.stage",
 } as const;
 
 // OTel event names (GenAI semantic conventions)
@@ -132,10 +136,19 @@ function normalizeErrorDetails(
 	return { name, message, exception };
 }
 
-function annotateErrorSpan(span: Span, error: unknown, fallbackMessage: string, errorType?: string) {
-	const details = normalizeErrorDetails(error, fallbackMessage);
+function annotateErrorSpan(
+	span: Span,
+	params: {
+		error: unknown;
+		fallbackMessage: string;
+		errorType?: ErrorType;
+		stage?: TraceErrorStage;
+	},
+) {
+	const details = normalizeErrorDetails(params.error, params.fallbackMessage);
 	span.setAttributes({
-		...(errorType ? { [ATTR.ERROR_TYPE]: errorType } : {}),
+		...(params.errorType ? { [ATTR.ERROR_TYPE]: params.errorType } : {}),
+		...(params.stage ? { [ATTR.ERROR_STAGE]: params.stage } : {}),
 		[ATTR.ERROR_NAME]: details.name,
 		[ATTR.ERROR_MESSAGE]: details.message,
 	});
@@ -199,8 +212,15 @@ export function endAskSpan(
 }
 
 /** End the root ask span with an error. */
-export function endAskSpanWithError(span: Span, errorType: string, error?: unknown): void {
-	annotateErrorSpan(span, error, errorType, errorType);
+export function endAskSpanWithError(span: Span, errorType: ErrorType, error?: unknown): void {
+	// Keep trace error.type aligned with the public ErrorType union so SDK
+	// consumers can query traces using the same values they see in TurnResult.
+	annotateErrorSpan(span, {
+		error,
+		fallbackMessage: errorType,
+		errorType,
+		stage: "ask",
+	});
 	span.end();
 }
 
@@ -226,7 +246,12 @@ export function endCompactionSpan(
 
 /** End the compaction span with an error. */
 export function endCompactionSpanWithError(span: Span, error: unknown): void {
-	annotateErrorSpan(span, error, "compaction failed", "compaction_failed");
+	annotateErrorSpan(span, {
+		error,
+		fallbackMessage: "compaction failed",
+		errorType: "internal_error",
+		stage: "compaction",
+	});
 	span.end();
 }
 
@@ -281,8 +306,16 @@ export function endGenerationSpan(
 }
 
 /** End a generation span with an error. */
-export function endGenerationSpanWithError(span: Span, error: unknown): void {
-	annotateErrorSpan(span, error, "generation failed", "generation_failed");
+export function endGenerationSpanWithError(
+	span: Span,
+	params: { errorType: ErrorType; error?: unknown; fallbackMessage?: string },
+): void {
+	annotateErrorSpan(span, {
+		error: params.error,
+		fallbackMessage: params.fallbackMessage ?? params.errorType,
+		errorType: params.errorType,
+		stage: "generation",
+	});
 	span.end();
 }
 
@@ -320,7 +353,12 @@ export function endToolSpan(span: Span, result: string): void {
 
 /** End a tool span with an error. */
 export function endToolSpanWithError(span: Span, error: unknown, result?: string): void {
-	const details = annotateErrorSpan(span, error, "tool execution failed", "tool_execution_failed");
+	const details = annotateErrorSpan(span, {
+		error,
+		fallbackMessage: "tool execution failed",
+		errorType: "internal_error",
+		stage: "tool_execution",
+	});
 	span.addEvent(EVENT.TOOL_CALL_RESULT, {
 		content: result ?? details.message,
 	});
