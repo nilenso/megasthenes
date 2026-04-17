@@ -13,6 +13,7 @@
 
 import { closeSync, openSync } from "node:fs";
 import { buildToolCommand } from "../tool-commands";
+import type { ErrorType } from "../types";
 import { isolatedGitCommand, isolatedGitToolCommand, isolatedToolCommand } from "./isolation";
 
 /** Path to seccomp BPF filter that blocks network sockets (arch-specific) */
@@ -180,6 +181,8 @@ interface CloneJob {
 	worktree?: string;
 	/** Set when status = "failed" */
 	error?: string;
+	/** Set when status = "failed" — programmatic error classification. */
+	errorType?: ErrorType;
 	startedAt: number;
 	finishedAt?: number;
 }
@@ -265,6 +268,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 			if (exitCode !== 0) {
 				job.status = "failed";
 				job.error = friendlyCloneError(stderr, url);
+				job.errorType = "clone_failed";
 				job.finishedAt = Date.now();
 				console.error(`[sandbox:clone] clone failed for ${url}: ${stderr.slice(0, 200)}`);
 				return;
@@ -276,6 +280,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 		if (revParse.exitCode !== 0) {
 			job.status = "failed";
 			job.error = `Cannot resolve commitish "${commitish}": ${revParse.stderr.slice(0, 300)}`;
+			job.errorType = "invalid_commitish";
 			job.finishedAt = Date.now();
 			return;
 		}
@@ -290,6 +295,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 			if (wt.exitCode !== 0) {
 				job.status = "failed";
 				job.error = `git worktree add failed: ${wt.stderr.slice(0, 300)}`;
+				job.errorType = "clone_failed";
 				job.finishedAt = Date.now();
 				return;
 			}
@@ -304,6 +310,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 		const msg = err instanceof Error ? err.message : String(err);
 		job.status = "failed";
 		job.error = msg;
+		job.errorType = "clone_failed";
 		job.finishedAt = Date.now();
 		console.error(`[sandbox:clone] exception for ${url}: ${msg}`);
 	}
@@ -384,6 +391,7 @@ function handleCloneStatus(slug: string, commitish: string): Response {
 			ok: false,
 			status: "failed",
 			error: job.error,
+			errorType: job.errorType,
 		});
 	}
 

@@ -7,8 +7,10 @@
 
 import type { Span } from "@opentelemetry/api";
 import { classifyThrownError } from "../error-classification";
+import { MegasthenesError } from "../errors";
 import { type Logger, nullLogger } from "../logger";
 import { endChildSpan, endChildSpanWithError, startChildSpan } from "../tracing";
+import type { ErrorType } from "../types";
 
 /** Configuration for connecting to a sandbox worker. */
 export interface SandboxClientConfig {
@@ -32,6 +34,23 @@ const CLONE_POLL_TIMEOUT_MS = 20 * 60 * 1000;
 const CLONE_POLL_INITIAL_INTERVAL_MS = 1_000;
 /** Maximum interval between clone status polls. */
 const CLONE_POLL_MAX_INTERVAL_MS = 5_000;
+
+interface CloneResponseBody {
+	ok: boolean;
+	status?: string;
+	slug?: string;
+	sha?: string;
+	worktree?: string;
+	error?: string;
+	errorType?: ErrorType;
+	elapsedMs?: number;
+}
+
+function sandboxCloneError(body: CloneResponseBody, fallbackMessage: string): MegasthenesError {
+	const errorType: ErrorType = body.errorType ?? "clone_failed";
+	const message = body.error ? `Sandbox clone failed: ${body.error}` : fallbackMessage;
+	return new MegasthenesError(errorType, message, { isRetryable: errorType !== "invalid_commitish" });
+}
 
 function completeClone(
 	cloneSpan: Span | undefined,
@@ -125,18 +144,11 @@ export class SandboxClient {
 				signal: AbortSignal.timeout(30_000), // Starting a clone should be fast
 			});
 
-			const startBody = (await startRes.json()) as {
-				ok: boolean;
-				status?: string;
-				slug?: string;
-				sha?: string;
-				worktree?: string;
-				error?: string;
-			};
+			const startBody = (await startRes.json()) as CloneResponseBody;
 
 			if (!startBody.ok) {
 				this.logger.error("sandbox:client", new Error(`POST /clone → ${startRes.status}: ${startBody.error}`));
-				throw new Error(`Sandbox clone failed: ${startBody.error}`);
+				throw sandboxCloneError(startBody, `Sandbox clone failed (HTTP ${startRes.status})`);
 			}
 
 			// Already ready (cached)
@@ -190,17 +202,10 @@ export class SandboxClient {
 						signal: AbortSignal.timeout(30_000),
 					});
 
-					const retryBody = (await retryRes.json()) as {
-						ok: boolean;
-						status?: string;
-						slug?: string;
-						sha?: string;
-						worktree?: string;
-						error?: string;
-					};
+					const retryBody = (await retryRes.json()) as CloneResponseBody;
 
 					if (!retryBody.ok) {
-						throw new Error(`Sandbox clone failed on retry: ${retryBody.error}`);
+						throw sandboxCloneError(retryBody, `Sandbox clone failed on retry (HTTP ${retryRes.status})`);
 					}
 
 					// If the re-triggered clone is already cached/ready, return immediately
@@ -222,15 +227,7 @@ export class SandboxClient {
 					continue;
 				}
 
-				const statusBody = (await statusRes.json()) as {
-					ok: boolean;
-					status?: string;
-					slug?: string;
-					sha?: string;
-					worktree?: string;
-					error?: string;
-					elapsedMs?: number;
-				};
+				const statusBody = (await statusRes.json()) as CloneResponseBody;
 
 				if (statusBody.status !== lastStatus) {
 					cloneSpan?.addEvent("sandbox.clone.poll", {
@@ -260,7 +257,7 @@ export class SandboxClient {
 					const duration = Date.now() - t0;
 					cloneSpan?.addEvent("sandbox.clone.failed", { elapsed_ms: duration, slug });
 					this.logger.error("sandbox:client", new Error(`clone failed after ${duration}ms: ${statusBody.error}`));
-					throw new Error(`Sandbox clone failed: ${statusBody.error}`);
+					throw sandboxCloneError(statusBody, `Sandbox clone failed after ${duration}ms`);
 				}
 
 				// Still cloning — log progress
@@ -273,8 +270,13 @@ export class SandboxClient {
 			cloneSpan?.addEvent("sandbox.clone.timed_out", { timeout_ms: CLONE_POLL_TIMEOUT_MS, slug });
 			throw new Error(`Sandbox clone timed out after ${CLONE_POLL_TIMEOUT_MS / 1000}s for ${url}`);
 		} catch (error) {
-			const classified = classifyThrownError(error);
-			const errorType = classified.errorType === "network_error" ? "network_error" : "clone_failed";
+			let errorType: ErrorType;
+			if (error instanceof MegasthenesError) {
+				errorType = error.errorType;
+			} else {
+				const classified = classifyThrownError(error);
+				errorType = classified.errorType === "network_error" ? "network_error" : "clone_failed";
+			}
 			endChildSpanWithError(cloneSpan, errorType, error);
 			throw error;
 		}
