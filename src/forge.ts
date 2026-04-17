@@ -202,7 +202,7 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {},
 						stderr: "inherit",
 					});
 					await proc.exited;
-					span?.addEvent("repo.fetch.started");
+					span?.addEvent("repo.fetch.finished");
 					endChildSpan(span, {
 						"megasthenes.repo.cache_path": cachePath,
 						"megasthenes.repo.cache_exists": true,
