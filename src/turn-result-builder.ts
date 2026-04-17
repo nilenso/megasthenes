@@ -30,7 +30,7 @@ export class TurnResultBuilder {
 		cacheReadTokens: 0,
 		cacheWriteTokens: 0,
 	};
-	#error: { code: ErrorType; message: string; isRetryable: boolean | null; details?: unknown } | null = null;
+	#error: { errorType: ErrorType; message: string; isRetryable: boolean | null; details?: unknown } | null = null;
 	#startedAt = 0;
 	#endedAt = 0;
 	#metadata: TurnMetadata | null = null;
@@ -134,19 +134,18 @@ export class TurnResultBuilder {
 
 			case "error":
 				this.#error = {
-					code: event.code,
+					errorType: event.errorType,
 					message: event.message,
 					isRetryable: event.isRetryable,
 					details: event.details,
 				};
 				this.#steps.push({
 					type: "error",
-					code: event.code,
-					source: errorSource(event.code),
+					errorType: event.errorType,
+					source: errorSource(event.errorType),
 					message: event.message,
 					isRetryable: event.isRetryable,
 					details: event.details,
-					recoverable: false,
 				});
 				break;
 		}
@@ -158,16 +157,15 @@ export class TurnResultBuilder {
 	}
 
 	/** Set the turn error (called by the session layer). */
-	setError(code: ErrorType, message: string, isRetryable: boolean | null, details?: unknown): void {
-		this.#error = { code, message, isRetryable, details };
+	setError(errorType: ErrorType, message: string, isRetryable: boolean | null, details?: unknown): void {
+		this.#error = { errorType, message, isRetryable, details };
 		this.#steps.push({
 			type: "error",
-			code,
-			source: errorSource(code),
+			errorType,
+			source: errorSource(errorType),
 			message,
 			isRetryable,
 			details,
-			recoverable: false,
 		});
 	}
 

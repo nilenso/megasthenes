@@ -630,19 +630,19 @@ describe("Session", () => {
 		});
 	});
 
-	describe("structured error codes", () => {
-		test("abort yields error with code 'aborted' and isRetryable false", async () => {
+	describe("structured error types", () => {
+		test("abort yields error with errorType 'aborted' and isRetryable false", async () => {
 			const controller = new AbortController();
 			controller.abort();
 
 			const session = new Session(createMockRepo(), createMockConfig());
 			const result = await session.ask("Test", { signal: controller.signal }).result();
 
-			expect(result.error?.code).toBe("aborted");
+			expect(result.error?.errorType).toBe("aborted");
 			expect(result.error?.isRetryable).toBe(false);
 		});
 
-		test("max iterations yields error with code 'max_iterations' and isRetryable false", async () => {
+		test("max iterations yields error with errorType 'max_iterations' and isRetryable false", async () => {
 			const customStream = (() =>
 				createToolCallStreamResult([
 					{ name: "rg", arguments: { pattern: "test" } },
@@ -651,11 +651,11 @@ describe("Session", () => {
 			const session = new Session(createMockRepo(), createMockConfig({ maxIterations: 1, stream: customStream }));
 			const result = await session.ask("Do something").result();
 
-			expect(result.error?.code).toBe("max_iterations");
+			expect(result.error?.errorType).toBe("max_iterations");
 			expect(result.error?.isRetryable).toBe(false);
 		});
 
-		test("provider error yields code 'provider_error'", async () => {
+		test("provider error yields errorType 'provider_error'", async () => {
 			const customStream = (() => ({
 				[Symbol.asyncIterator]: async function* () {
 					yield { type: "error", error: { errorMessage: "API error" } };
@@ -666,11 +666,11 @@ describe("Session", () => {
 			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
 			const result = await session.ask("Test").result();
 
-			expect(result.error?.code).toBe("provider_error");
+			expect(result.error?.errorType).toBe("provider_error");
 			expect(result.error?.isRetryable).toBeNull();
 		});
 
-		test("empty response yields code 'empty_response' and isRetryable true", async () => {
+		test("empty response yields errorType 'empty_response' and isRetryable true", async () => {
 			const customStream = (() => ({
 				[Symbol.asyncIterator]: async function* () {
 					yield { type: "text_delta", delta: "" };
@@ -690,11 +690,11 @@ describe("Session", () => {
 			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
 			const result = await session.ask("Test").result();
 
-			expect(result.error?.code).toBe("empty_response");
+			expect(result.error?.errorType).toBe("empty_response");
 			expect(result.error?.isRetryable).toBe(true);
 		});
 
-		test("error steps include code and source derived from code", async () => {
+		test("error steps include errorType and source derived from errorType", async () => {
 			const controller = new AbortController();
 			controller.abort();
 
@@ -704,7 +704,7 @@ describe("Session", () => {
 			const errorSteps = result.steps.filter((s) => s.type === "error");
 			expect(errorSteps).toHaveLength(1);
 			if (errorSteps[0]?.type === "error") {
-				expect(errorSteps[0].code).toBe("aborted");
+				expect(errorSteps[0].errorType).toBe("aborted");
 				expect(errorSteps[0].source).toBe("library");
 				expect(errorSteps[0].isRetryable).toBe(false);
 			}

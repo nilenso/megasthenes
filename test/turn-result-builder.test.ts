@@ -250,7 +250,7 @@ describe("TurnResultBuilder", () => {
 				{ type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 },
 				{
 					type: "error",
-					code: "provider_error",
+					errorType: "provider_error",
 					message: "API call failed",
 					isRetryable: null,
 					details: { code: 500 },
@@ -258,7 +258,7 @@ describe("TurnResultBuilder", () => {
 			]);
 
 			expect(result.error).not.toBeNull();
-			expect(result.error?.code).toBe("provider_error");
+			expect(result.error?.errorType).toBe("provider_error");
 			expect(result.error?.message).toBe("API call failed");
 			expect(result.error?.isRetryable).toBeNull();
 			expect(result.error?.details).toEqual({ code: 500 });
@@ -267,12 +267,11 @@ describe("TurnResultBuilder", () => {
 			expect(errorSteps).toHaveLength(1);
 			expect(errorSteps[0]).toEqual({
 				type: "error",
-				code: "provider_error",
+				errorType: "provider_error",
 				source: "provider",
 				message: "API call failed",
 				isRetryable: null,
 				details: { code: 500 },
-				recoverable: false,
 			});
 		});
 
@@ -282,7 +281,7 @@ describe("TurnResultBuilder", () => {
 
 			const result = builder.build();
 			expect(result.error).toEqual({
-				code: "max_iterations",
+				errorType: "max_iterations",
 				message: "Max iterations reached",
 				isRetryable: false,
 			});
@@ -290,7 +289,7 @@ describe("TurnResultBuilder", () => {
 			const errorSteps = result.steps.filter((s) => s.type === "error");
 			expect(errorSteps).toHaveLength(1);
 			if (errorSteps[0]?.type === "error") {
-				expect(errorSteps[0].code).toBe("max_iterations");
+				expect(errorSteps[0].errorType).toBe("max_iterations");
 				expect(errorSteps[0].source).toBe("library");
 			}
 		});
@@ -298,7 +297,7 @@ describe("TurnResultBuilder", () => {
 		test("error with preceding text preserves both as steps", () => {
 			const result = buildFromEvents([
 				{ type: "text", text: "partial" },
-				{ type: "error", code: "provider_error", message: "interrupted", isRetryable: null },
+				{ type: "error", errorType: "provider_error", message: "interrupted", isRetryable: null },
 			]);
 
 			expect(result.steps).toHaveLength(2);

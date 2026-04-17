@@ -22,7 +22,10 @@ export type ErrorType =
 	| "provider_error"
 	| "empty_response"
 	| "network_error"
-	| "internal_error";
+	| "internal_error"
+	| "clone_failed"
+	| "invalid_commitish"
+	| "invalid_config";
 
 // =============================================================================
 // Stream Events
@@ -156,8 +159,8 @@ export interface IterationStart {
 /** An unrecoverable error occurred during the turn. */
 export interface TurnError {
 	type: "error";
-	/** Programmatic error code for switch/match. */
-	code: ErrorType;
+	/** Programmatic error type for switch/match. */
+	errorType: ErrorType;
 	/** Human-readable message. */
 	message: string;
 	/** Whether retrying might succeed. null = unknown (e.g., opaque provider errors). */
@@ -208,13 +211,11 @@ export type Step =
 	| { type: "compaction"; summary: string; tokensBefore: number; tokensAfter: number }
 	| {
 			type: "error";
-			code: ErrorType;
+			errorType: ErrorType;
 			source: "provider" | "library";
 			message: string;
 			isRetryable: boolean | null;
 			details?: unknown;
-			/** @deprecated Use code + isRetryable instead. */
-			recoverable: boolean;
 	  };
 
 /** Token usage totals across all iterations in a turn. */
@@ -264,7 +265,7 @@ export interface TurnResult {
 	readonly metadata: TurnMetadata;
 	/** Non-null if the turn ended in an unrecoverable error. */
 	readonly error: {
-		code: ErrorType;
+		errorType: ErrorType;
 		message: string;
 		isRetryable: boolean | null;
 		details?: unknown;

@@ -176,7 +176,7 @@ export function processStreamToEvents(
 						const classified = classifyProviderError(event.error as AssistantMessage, contextWindow);
 						yield {
 							type: "error",
-							code: classified.code,
+							errorType: classified.errorType,
 							message: `API call failed: ${errorText}`,
 							isRetryable: classified.isRetryable,
 							details: event.error,
@@ -202,7 +202,7 @@ export function processStreamToEvents(
 			const classified = classifyThrownError(error);
 			yield {
 				type: "error",
-				code: classified.code,
+				errorType: classified.errorType,
 				message: `API call failed: ${errorMessage}`,
 				isRetryable: classified.isRetryable,
 				details: error,

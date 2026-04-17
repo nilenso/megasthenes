@@ -5,12 +5,12 @@
 import type { ErrorType } from "./types";
 
 export class MegasthenesError extends Error {
-	readonly code: ErrorType;
+	readonly errorType: ErrorType;
 	readonly isRetryable: boolean | null;
 	readonly details?: unknown;
 
 	constructor(
-		code: ErrorType,
+		errorType: ErrorType,
 		message: string,
 		options?: {
 			isRetryable?: boolean | null;
@@ -20,7 +20,7 @@ export class MegasthenesError extends Error {
 	) {
 		super(message, { cause: options?.cause });
 		this.name = "MegasthenesError";
-		this.code = code;
+		this.errorType = errorType;
 		this.isRetryable = options?.isRetryable ?? null;
 		this.details = options?.details;
 	}

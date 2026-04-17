@@ -295,7 +295,7 @@ export class Session {
 
 			// Check for abort before starting
 			if (options?.signal?.aborted) {
-				yield { type: "error", code: "aborted", message: "Aborted", isRetryable: false };
+				yield { type: "error", errorType: "aborted", message: "Aborted", isRetryable: false };
 				return;
 			}
 
@@ -361,7 +361,7 @@ export class Session {
 			for (let iteration = 0; iteration < turnMaxIterations; iteration++) {
 				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
-					yield { type: "error", code: "aborted", message: "Aborted", isRetryable: false };
+					yield { type: "error", errorType: "aborted", message: "Aborted", isRetryable: false };
 					endAskSpanWithError(askSpan, "aborted");
 					askSpanEnded = true;
 					yield {
@@ -441,7 +441,7 @@ export class Session {
 						endGenerationSpanWithError(genSpan, "Empty response from API");
 						yield {
 							type: "error",
-							code: "empty_response",
+							errorType: "empty_response",
 							message: "Model returned an empty response",
 							isRetryable: true,
 						};
@@ -490,7 +490,7 @@ export class Session {
 			// Max iterations reached
 			yield {
 				type: "error",
-				code: "max_iterations",
+				errorType: "max_iterations",
 				message: "Max iterations reached without a final answer.",
 				isRetryable: false,
 			};

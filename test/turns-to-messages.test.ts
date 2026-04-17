@@ -239,11 +239,10 @@ describe("reconstructContext", () => {
 				{ type: "text", text: "Answer.", role: "assistant" },
 				{
 					type: "error",
-					code: "provider_error",
+					errorType: "provider_error",
 					source: "provider",
 					message: "Rate limited",
 					isRetryable: null,
-					recoverable: true,
 				},
 			],
 		});

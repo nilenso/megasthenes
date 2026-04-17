@@ -20,7 +20,7 @@ const NETWORK_ERROR_PATTERNS = [
 ];
 
 export interface ClassifiedError {
-	code: ErrorType;
+	errorType: ErrorType;
 	isRetryable: boolean | null;
 }
 
@@ -30,9 +30,9 @@ export interface ClassifiedError {
  */
 export function classifyProviderError(assistantMessage: AssistantMessage, contextWindow?: number): ClassifiedError {
 	if (isContextOverflow(assistantMessage, contextWindow)) {
-		return { code: "context_overflow", isRetryable: true };
+		return { errorType: "context_overflow", isRetryable: true };
 	}
-	return { code: "provider_error", isRetryable: null };
+	return { errorType: "provider_error", isRetryable: null };
 }
 
 /**
@@ -42,20 +42,23 @@ export function classifyProviderError(assistantMessage: AssistantMessage, contex
 export function classifyThrownError(error: unknown): ClassifiedError {
 	const message = error instanceof Error ? error.message : String(error);
 	if (NETWORK_ERROR_PATTERNS.some((p) => p.test(message))) {
-		return { code: "network_error", isRetryable: true };
+		return { errorType: "network_error", isRetryable: true };
 	}
-	return { code: "provider_error", isRetryable: null };
+	return { errorType: "provider_error", isRetryable: null };
 }
 
 /**
  * Derive error source from error code.
  * Library errors originate from megasthenes itself; provider errors from the LLM.
  */
-export function errorSource(code: ErrorType): "provider" | "library" {
-	switch (code) {
+export function errorSource(errorType: ErrorType): "provider" | "library" {
+	switch (errorType) {
 		case "aborted":
 		case "max_iterations":
 		case "internal_error":
+		case "clone_failed":
+		case "invalid_commitish":
+		case "invalid_config":
 			return "library";
 		case "context_overflow":
 		case "provider_error":

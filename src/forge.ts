@@ -1,6 +1,7 @@
 import { access, mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { MegasthenesError } from "./errors";
 
 /**
  * Lock map to prevent race conditions when cloning the same repo in parallel.
@@ -105,7 +106,7 @@ function parseRepoPath(repoUrl: string): { username: string; reponame: string } 
 		.replace(/\.git$/, "")
 		.split("/");
 	if (parts.length < 2 || !parts[0] || !parts[1]) {
-		throw new Error(`Invalid repo URL: ${repoUrl}`);
+		throw new MegasthenesError("invalid_config", `Invalid repo URL: ${repoUrl}`, { isRetryable: false });
 	}
 	return { username: parts[0], reponame: parts[1] };
 }
@@ -169,7 +170,13 @@ export async function cleanupWorktree(repo: Repo): Promise<boolean> {
 export async function connectRepo(repoUrl: string, options: ConnectOptions = {}): Promise<Repo> {
 	const forgeName = options.forge ?? inferForge(repoUrl);
 	if (!forgeName) {
-		throw new Error(`Cannot infer forge from URL: ${repoUrl}. Please specify 'forge' option.`);
+		throw new MegasthenesError(
+			"invalid_config",
+			`Cannot infer forge from URL: ${repoUrl}. Please specify 'forge' option.`,
+			{
+				isRetryable: false,
+			},
+		);
 	}
 
 	const forge = forges[forgeName];
@@ -205,7 +212,9 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {})
 			});
 			const exitCode = await proc.exited;
 			if (exitCode !== 0) {
-				throw new Error(`git clone failed with exit code ${exitCode}`);
+				throw new MegasthenesError("clone_failed", `git clone failed with exit code ${exitCode}`, {
+					isRetryable: true,
+				});
 			}
 		}
 	});
@@ -218,7 +227,9 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {})
 	const sha = (await new Response(revParseProc.stdout).text()).trim();
 	const revParseExit = await revParseProc.exited;
 	if (revParseExit !== 0) {
-		throw new Error(`Failed to resolve commitish: ${commitish}`);
+		throw new MegasthenesError("invalid_commitish", `Failed to resolve commitish: ${commitish}`, {
+			isRetryable: false,
+		});
 	}
 
 	const shortSha = sha.slice(0, 12);
@@ -253,7 +264,9 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {})
 				cachePath: resolve(cachePath),
 			};
 		}
-		throw new Error(`git worktree add failed with exit code ${worktreeExit}`);
+		throw new MegasthenesError("clone_failed", `git worktree add failed with exit code ${worktreeExit}`, {
+			isRetryable: true,
+		});
 	}
 
 	return {
