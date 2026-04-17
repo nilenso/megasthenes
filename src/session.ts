@@ -25,7 +25,6 @@ import {
 	endGenerationSpan,
 	endGenerationSpanWithError,
 	endRootAskSpan,
-	endRootAskSpanWithError,
 	endToolSpan,
 	endToolSpanWithError,
 	startAskSpan,
@@ -254,20 +253,12 @@ export class Session {
 		if (this.#closed) return;
 		this.#closed = true;
 
-		try {
-			// Clean up worktree, log if it fails
-			const success = await cleanupWorktree(this.repo);
-			if (!success) {
-				this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
-			}
-			if (this.#traceRoot?.rootSpan.isRecording()) {
-				endRootAskSpan(this.#traceRoot.rootSpan);
-			}
-		} catch (error) {
-			if (this.#traceRoot?.rootSpan.isRecording()) {
-				endRootAskSpanWithError(this.#traceRoot.rootSpan, "internal_error", error);
-			}
-			throw error;
+		const success = await cleanupWorktree(this.repo);
+		if (!success) {
+			this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
+		}
+		if (this.#traceRoot) {
+			endRootAskSpan(this.#traceRoot.rootSpan);
 		}
 	}
 
