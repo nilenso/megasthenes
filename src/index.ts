@@ -110,7 +110,16 @@ export interface SessionConfig {
  *   model: { provider: "anthropic", id: "claude-sonnet-4-6" },
  *   maxIterations: 20,
  * });
+ * try {
+ *   for await (const ev of session.ask("...")) { ... }
+ * } finally {
+ *   await session.close();
+ * }
  * ```
+ *
+ * **Always close the returned session.** `connect()` starts a root OTel span
+ * that only ends in `Session.close()`; skipping close causes the entire trace
+ * tree for that session to be dropped. See `Session.close()` for details.
  */
 function classifyConnectError(error: unknown): ErrorType {
 	if (error instanceof MegasthenesError) {
@@ -134,6 +143,11 @@ export class Client {
 
 	/**
 	 * Connect to a repository and create a session.
+	 *
+	 * Starts a root OTel "ask" span that lives until `Session.close()` is called.
+	 * The caller MUST invoke `session.close()` (typically in a `finally` block)
+	 * or the root span never ends and the OTel SDK drops the whole trace on
+	 * shutdown. See `Session.close()` for details.
 	 *
 	 * @param config - Session configuration (repo, model, iterations, etc.)
 	 * @param onProgress - Optional callback for clone progress messages

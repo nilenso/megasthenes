@@ -245,9 +245,26 @@ export class Session {
 	/**
 	 * Close the session and clean up resources.
 	 *
-	 * This removes the git worktree associated with the session.
-	 * The session cannot be used after closing.
-	 * Safe to call multiple times.
+	 * **This MUST be called when the caller is done with the session.** The root
+	 * OTel "ask" span is started in `Client.connect()` and only ended here; if
+	 * `close()` is never called (early return, thrown `ask()`, caller forgets,
+	 * session is GC'd), the root span never terminates and the OTel SDK silently
+	 * drops the entire trace tree on shutdown — every turn, generation, and
+	 * tool span for this session is lost from your observability backend.
+	 *
+	 * Always pair `connect()` with `close()` via try/finally:
+	 *
+	 * ```ts
+	 * const session = await client.connect(config);
+	 * try {
+	 *   for await (const ev of session.ask("...")) { ... }
+	 * } finally {
+	 *   await session.close();
+	 * }
+	 * ```
+	 *
+	 * Also removes the git worktree associated with the session.
+	 * The session cannot be used after closing. Safe to call multiple times.
 	 */
 	async close(): Promise<void> {
 		if (this.#closed) return;
