@@ -33,6 +33,23 @@ const CLONE_POLL_INITIAL_INTERVAL_MS = 1_000;
 /** Maximum interval between clone status polls. */
 const CLONE_POLL_MAX_INTERVAL_MS = 5_000;
 
+function completeClone(
+	cloneSpan: Span | undefined,
+	onProgress: ((message: string) => void) | undefined,
+	body: { slug?: string; sha: string; worktree: string },
+	slugFallback?: string,
+): CloneResult {
+	const slug = body.slug ?? slugFallback;
+	if (!slug) throw new Error("Sandbox clone: ready response missing slug");
+	onProgress?.("Repository ready");
+	endChildSpan(cloneSpan, {
+		"megasthenes.sandbox.slug": slug,
+		"megasthenes.repo.commitish": body.sha,
+		"megasthenes.repo.local_path": body.worktree,
+	});
+	return { slug, sha: body.sha, worktree: body.worktree };
+}
+
 export class SandboxClient {
 	private config: SandboxClientConfig;
 	private logger: Logger;
@@ -130,13 +147,11 @@ export class SandboxClient {
 					`POST /clone → ready (cached) (${duration}ms) slug=${startBody.slug} sha=${startBody.sha.slice(0, 12)}`,
 				);
 				cloneSpan?.addEvent("sandbox.clone.cached_ready", { elapsed_ms: duration });
-				onProgress?.("Repository ready");
-				endChildSpan(cloneSpan, {
-					"megasthenes.sandbox.slug": startBody.slug,
-					"megasthenes.repo.commitish": startBody.sha,
-					"megasthenes.repo.local_path": startBody.worktree,
+				return completeClone(cloneSpan, onProgress, {
+					slug: startBody.slug,
+					sha: startBody.sha,
+					worktree: startBody.worktree,
 				});
-				return { slug: startBody.slug, sha: startBody.sha, worktree: startBody.worktree };
 			}
 
 			const slug = startBody.slug;
@@ -199,13 +214,11 @@ export class SandboxClient {
 							`clone ready on retry (${duration}ms) slug=${retryBody.slug} sha=${retryBody.sha.slice(0, 12)}`,
 						);
 						cloneSpan?.addEvent("sandbox.clone.ready", { elapsed_ms: duration, slug: retryBody.slug });
-						onProgress?.("Repository ready");
-						endChildSpan(cloneSpan, {
-							"megasthenes.sandbox.slug": retryBody.slug,
-							"megasthenes.repo.commitish": retryBody.sha,
-							"megasthenes.repo.local_path": retryBody.worktree,
+						return completeClone(cloneSpan, onProgress, {
+							slug: retryBody.slug,
+							sha: retryBody.sha,
+							worktree: retryBody.worktree,
 						});
-						return { slug: retryBody.slug, sha: retryBody.sha, worktree: retryBody.worktree };
 					}
 
 					// Otherwise continue polling for the re-triggered job
@@ -229,13 +242,12 @@ export class SandboxClient {
 						`clone ready (${duration}ms) slug=${slug} sha=${statusBody.sha.slice(0, 12)}`,
 					);
 					cloneSpan?.addEvent("sandbox.clone.ready", { elapsed_ms: duration, slug });
-					onProgress?.("Repository ready");
-					endChildSpan(cloneSpan, {
-						"megasthenes.sandbox.slug": statusBody.slug ?? slug,
-						"megasthenes.repo.commitish": statusBody.sha,
-						"megasthenes.repo.local_path": statusBody.worktree,
-					});
-					return { slug: statusBody.slug ?? slug, sha: statusBody.sha, worktree: statusBody.worktree };
+					return completeClone(
+						cloneSpan,
+						onProgress,
+						{ slug: statusBody.slug, sha: statusBody.sha, worktree: statusBody.worktree },
+						slug,
+					);
 				}
 
 				if (statusBody.status === "failed") {
