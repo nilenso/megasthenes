@@ -52,12 +52,10 @@ function sandboxCloneError(body: CloneResponseBody, fallbackMessage: string): Me
 	return new MegasthenesError(errorType, message, { isRetryable: errorType !== "invalid_commitish" });
 }
 
-type TriggerOutcome =
-	| { kind: "ready"; slug: string; sha: string; worktree: string }
-	| { kind: "pending"; slug: string };
+type TriggerOutcome = ({ kind: "ready" } & CloneResult) | { kind: "pending"; slug: string };
 
 type PollOutcome =
-	| { kind: "ready"; slug: string; sha: string; worktree: string }
+	| ({ kind: "ready" } & CloneResult)
 	| { kind: "failed"; body: CloneResponseBody }
 	| { kind: "timed_out" };
 
@@ -161,7 +159,7 @@ async function waitForClone(
 function completeClone(
 	cloneSpan: Span | undefined,
 	onProgress: ((message: string) => void) | undefined,
-	result: { slug: string; sha: string; worktree: string },
+	result: CloneResult,
 ): CloneResult {
 	onProgress?.("Repository ready");
 	endChildSpan(cloneSpan, {
@@ -169,7 +167,7 @@ function completeClone(
 		"megasthenes.repo.commitish": result.sha,
 		"megasthenes.repo.local_path": result.worktree,
 	});
-	return result;
+	return { slug: result.slug, sha: result.sha, worktree: result.worktree };
 }
 
 export class SandboxClient {

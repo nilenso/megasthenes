@@ -168,9 +168,7 @@ interface CachePhaseResult {
 async function ensureCachedRepo(
 	cachePath: string,
 	commitish: string,
-	forge: Forge,
-	repoUrl: string,
-	token: string | undefined,
+	buildCloneUrl: () => string,
 ): Promise<CachePhaseResult> {
 	const headFile = join(cachePath, "HEAD");
 	const cacheExists = await exists(headFile);
@@ -199,8 +197,7 @@ async function ensureCachedRepo(
 		await rm(cachePath, { recursive: true, force: true });
 	}
 	await mkdir(cachePath, { recursive: true });
-	const cloneUrl = forge.buildCloneUrl(repoUrl, token);
-	const proc = Bun.spawn(["git", "clone", "--bare", "--filter=blob:none", cloneUrl, cachePath], {
+	const proc = Bun.spawn(["git", "clone", "--bare", "--filter=blob:none", buildCloneUrl(), cachePath], {
 		stdout: "inherit",
 		stderr: "inherit",
 	});
@@ -310,7 +307,7 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {},
 
 	await withChildSpan(parentSpan, "repo.clone_or_fetch", "clone_failed", async (span) => {
 		const result = await withCloneLock(cachePath, () =>
-			ensureCachedRepo(cachePath, commitish, forge, repoUrl, options.token),
+			ensureCachedRepo(cachePath, commitish, () => forge.buildCloneUrl(repoUrl, options.token)),
 		);
 		recordCachePhaseOutcome(span, cachePath, result);
 	});
