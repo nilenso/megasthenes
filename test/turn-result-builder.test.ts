@@ -252,7 +252,7 @@ describe("TurnResultBuilder", () => {
 					type: "error",
 					errorType: "provider_error",
 					message: "API call failed",
-					isRetryable: null,
+					retryability: "unknown",
 					details: { code: 500 },
 				},
 			]);
@@ -260,7 +260,7 @@ describe("TurnResultBuilder", () => {
 			expect(result.error).not.toBeNull();
 			expect(result.error?.errorType).toBe("provider_error");
 			expect(result.error?.message).toBe("API call failed");
-			expect(result.error?.isRetryable).toBeNull();
+			expect(result.error?.retryability).toBe("unknown");
 			expect(result.error?.details).toEqual({ code: 500 });
 
 			const errorSteps = result.steps.filter((s) => s.type === "error");
@@ -270,20 +270,20 @@ describe("TurnResultBuilder", () => {
 				errorType: "provider_error",
 				source: "provider",
 				message: "API call failed",
-				isRetryable: null,
+				retryability: "unknown",
 				details: { code: 500 },
 			});
 		});
 
 		test("setError() sets turn-level error", () => {
 			const builder = new TurnResultBuilder();
-			builder.setError("max_iterations", "Max iterations reached", false);
+			builder.setError("max_iterations", "Max iterations reached", "no");
 
 			const result = builder.build();
 			expect(result.error).toEqual({
 				errorType: "max_iterations",
 				message: "Max iterations reached",
-				isRetryable: false,
+				retryability: "no",
 			});
 
 			const errorSteps = result.steps.filter((s) => s.type === "error");
@@ -297,7 +297,7 @@ describe("TurnResultBuilder", () => {
 		test("error with preceding text preserves both as steps", () => {
 			const result = buildFromEvents([
 				{ type: "text", text: "partial" },
-				{ type: "error", errorType: "provider_error", message: "interrupted", isRetryable: null },
+				{ type: "error", errorType: "provider_error", message: "interrupted", retryability: "unknown" },
 			]);
 
 			expect(result.steps).toHaveLength(2);

@@ -108,7 +108,7 @@ function parseRepoPath(repoUrl: string): { username: string; reponame: string } 
 		.replace(/\.git$/, "")
 		.split("/");
 	if (parts.length < 2 || !parts[0] || !parts[1]) {
-		throw new MegasthenesError("invalid_config", `Invalid repo URL: ${repoUrl}`, { isRetryable: false });
+		throw new MegasthenesError("invalid_config", `Invalid repo URL: ${repoUrl}`, { retryability: "no" });
 	}
 	return { username: parts[0], reponame: parts[1] };
 }
@@ -186,7 +186,7 @@ async function ensureCachedRepo(
 		const fetchExit = await proc.exited;
 		if (fetchExit !== 0) {
 			throw new MegasthenesError("fetch_failed", `git fetch failed with exit code ${fetchExit}`, {
-				isRetryable: true,
+				retryability: "yes",
 			});
 		}
 		return { operation: "fetch", cacheExisted: true };
@@ -204,7 +204,7 @@ async function ensureCachedRepo(
 	const exitCode = await proc.exited;
 	if (exitCode !== 0) {
 		throw new MegasthenesError("clone_failed", `git clone failed with exit code ${exitCode}`, {
-			isRetryable: true,
+			retryability: "yes",
 		});
 	}
 	return { operation: "clone", cacheExisted: false };
@@ -220,7 +220,7 @@ async function resolveCommitish(cachePath: string, commitish: string): Promise<s
 	const exitCode = await proc.exited;
 	if (exitCode !== 0) {
 		throw new MegasthenesError("invalid_commitish", `Failed to resolve commitish: ${commitish}`, {
-			isRetryable: false,
+			retryability: "no",
 		});
 	}
 	return resolved;
@@ -241,7 +241,7 @@ async function ensureWorktree(cachePath: string, sha: string, worktreePath: stri
 	// Re-check the path: if still missing, it's a real failure.
 	if (exitCode !== 0 && !(await exists(worktreePath))) {
 		throw new MegasthenesError("clone_failed", `git worktree add failed with exit code ${exitCode}`, {
-			isRetryable: true,
+			retryability: "yes",
 		});
 	}
 	return { reused: exitCode !== 0 };
@@ -295,7 +295,7 @@ export async function connectRepo(repoUrl: string, options: ConnectOptions = {},
 		throw new MegasthenesError(
 			"invalid_config",
 			`Cannot infer forge from URL: ${repoUrl}. Please specify 'forge' option.`,
-			{ isRetryable: false },
+			{ retryability: "no" },
 		);
 	}
 

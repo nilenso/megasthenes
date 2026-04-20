@@ -28,6 +28,14 @@ export type ErrorType =
 	| "invalid_commitish"
 	| "invalid_config";
 
+/**
+ * Named retryability states for errors.
+ * - "yes"     — retrying the same operation might succeed
+ * - "no"      — retrying will not succeed
+ * - "unknown" — retryability cannot be determined (e.g. opaque provider errors)
+ */
+export type Retryability = "yes" | "no" | "unknown";
+
 // =============================================================================
 // Stream Events
 // =============================================================================
@@ -185,8 +193,8 @@ export interface TurnError {
 	errorType: ErrorType;
 	/** Human-readable message. */
 	message: string;
-	/** Whether retrying might succeed. null = unknown (e.g., opaque provider errors). */
-	isRetryable: boolean | null;
+	/** Whether retrying might succeed. "unknown" for opaque provider errors. */
+	retryability: Retryability;
 	/** Raw error details (for logging/debugging). */
 	details?: unknown;
 }
@@ -236,7 +244,7 @@ export type Step =
 			errorType: ErrorType;
 			source: "provider" | "library";
 			message: string;
-			isRetryable: boolean | null;
+			retryability: Retryability;
 			details?: unknown;
 	  };
 
@@ -294,7 +302,7 @@ export interface TurnResult {
 	readonly error: {
 		errorType: ErrorType;
 		message: string;
-		isRetryable: boolean | null;
+		retryability: Retryability;
 		details?: unknown;
 	} | null;
 	/** Epoch ms when this turn started. */

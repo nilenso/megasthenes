@@ -25,7 +25,7 @@ describe("classifyProviderError", () => {
 		});
 		const result = classifyProviderError(msg);
 		expect(result.errorType).toBe("context_overflow");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects context overflow from OpenAI-style message", () => {
@@ -34,7 +34,7 @@ describe("classifyProviderError", () => {
 		});
 		const result = classifyProviderError(msg);
 		expect(result.errorType).toBe("context_overflow");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("returns provider_error for generic error message", () => {
@@ -43,14 +43,14 @@ describe("classifyProviderError", () => {
 		});
 		const result = classifyProviderError(msg);
 		expect(result.errorType).toBe("provider_error");
-		expect(result.isRetryable).toBeNull();
+		expect(result.retryability).toBe("unknown");
 	});
 
 	test("returns provider_error when no error message", () => {
 		const msg = makeAssistantMessage({ errorMessage: undefined });
 		const result = classifyProviderError(msg);
 		expect(result.errorType).toBe("provider_error");
-		expect(result.isRetryable).toBeNull();
+		expect(result.retryability).toBe("unknown");
 	});
 });
 
@@ -58,49 +58,49 @@ describe("classifyThrownError", () => {
 	test("detects ECONNREFUSED as network_error", () => {
 		const result = classifyThrownError(new Error("connect ECONNREFUSED 127.0.0.1:443"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects fetch failed as network_error", () => {
 		const result = classifyThrownError(new TypeError("fetch failed"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects ETIMEDOUT as network_error", () => {
 		const result = classifyThrownError(new Error("connect ETIMEDOUT 1.2.3.4:443"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects ENOTFOUND as network_error", () => {
 		const result = classifyThrownError(new Error("getaddrinfo ENOTFOUND api.example.com"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects ECONNRESET as network_error", () => {
 		const result = classifyThrownError(new Error("read ECONNRESET"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("detects socket hang up as network_error", () => {
 		const result = classifyThrownError(new Error("socket hang up"));
 		expect(result.errorType).toBe("network_error");
-		expect(result.isRetryable).toBe(true);
+		expect(result.retryability).toBe("yes");
 	});
 
 	test("returns provider_error for non-network error", () => {
 		const result = classifyThrownError(new Error("Invalid JSON in response"));
 		expect(result.errorType).toBe("provider_error");
-		expect(result.isRetryable).toBeNull();
+		expect(result.retryability).toBe("unknown");
 	});
 
 	test("handles non-Error values", () => {
 		const result = classifyThrownError("string error");
 		expect(result.errorType).toBe("provider_error");
-		expect(result.isRetryable).toBeNull();
+		expect(result.retryability).toBe("unknown");
 	});
 });
 

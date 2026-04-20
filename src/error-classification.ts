@@ -6,7 +6,7 @@
  */
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { isContextOverflow } from "@mariozechner/pi-ai";
-import type { ErrorType } from "./types";
+import type { ErrorType, Retryability } from "./types";
 
 /** Heuristic patterns for network-level JavaScript exceptions. */
 const NETWORK_ERROR_PATTERNS = [
@@ -21,7 +21,7 @@ const NETWORK_ERROR_PATTERNS = [
 
 export interface ClassifiedError {
 	errorType: ErrorType;
-	isRetryable: boolean | null;
+	retryability: Retryability;
 }
 
 /**
@@ -30,9 +30,9 @@ export interface ClassifiedError {
  */
 export function classifyProviderError(assistantMessage: AssistantMessage, contextWindow?: number): ClassifiedError {
 	if (isContextOverflow(assistantMessage, contextWindow)) {
-		return { errorType: "context_overflow", isRetryable: true };
+		return { errorType: "context_overflow", retryability: "yes" };
 	}
-	return { errorType: "provider_error", isRetryable: null };
+	return { errorType: "provider_error", retryability: "unknown" };
 }
 
 /**
@@ -42,9 +42,9 @@ export function classifyProviderError(assistantMessage: AssistantMessage, contex
 export function classifyThrownError(error: unknown): ClassifiedError {
 	const message = error instanceof Error ? error.message : String(error);
 	if (NETWORK_ERROR_PATTERNS.some((p) => p.test(message))) {
-		return { errorType: "network_error", isRetryable: true };
+		return { errorType: "network_error", retryability: "yes" };
 	}
-	return { errorType: "provider_error", isRetryable: null };
+	return { errorType: "provider_error", retryability: "unknown" };
 }
 
 /**

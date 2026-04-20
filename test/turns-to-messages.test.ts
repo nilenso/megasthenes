@@ -242,7 +242,7 @@ describe("reconstructContext", () => {
 					errorType: "provider_error",
 					source: "provider",
 					message: "Rate limited",
-					isRetryable: null,
+					retryability: "unknown",
 				},
 			],
 		});

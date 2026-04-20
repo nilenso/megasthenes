@@ -178,7 +178,7 @@ export function processStreamToEvents(
 							type: "error",
 							errorType: classified.errorType,
 							message: `API call failed: ${errorText}`,
-							isRetryable: classified.isRetryable,
+							retryability: classified.retryability,
 							details: event.error,
 						};
 						return;
@@ -204,7 +204,7 @@ export function processStreamToEvents(
 				type: "error",
 				errorType: classified.errorType,
 				message: `API call failed: ${errorMessage}`,
-				isRetryable: classified.isRetryable,
+				retryability: classified.retryability,
 				details: error,
 			};
 		}

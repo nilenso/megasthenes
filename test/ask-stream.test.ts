@@ -110,7 +110,13 @@ describe("AskStream", () => {
 	test("error stream produces TurnResult with .error set", async () => {
 		const events: StreamEvent[] = [
 			{ type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 },
-			{ type: "error", errorType: "provider_error", message: "API failed", isRetryable: null, details: { code: 500 } },
+			{
+				type: "error",
+				errorType: "provider_error",
+				message: "API failed",
+				retryability: "unknown",
+				details: { code: 500 },
+			},
 		];
 		const stream = new AskStreamImpl(makeProducer(events));
 

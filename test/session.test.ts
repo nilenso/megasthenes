@@ -631,7 +631,7 @@ describe("Session", () => {
 	});
 
 	describe("structured error types", () => {
-		test("abort yields error with errorType 'aborted' and isRetryable false", async () => {
+		test("abort yields error with errorType 'aborted' and retryability 'no'", async () => {
 			const controller = new AbortController();
 			controller.abort();
 
@@ -639,10 +639,10 @@ describe("Session", () => {
 			const result = await session.ask("Test", { signal: controller.signal }).result();
 
 			expect(result.error?.errorType).toBe("aborted");
-			expect(result.error?.isRetryable).toBe(false);
+			expect(result.error?.retryability).toBe("no");
 		});
 
-		test("max iterations yields error with errorType 'max_iterations' and isRetryable false", async () => {
+		test("max iterations yields error with errorType 'max_iterations' and retryability 'no'", async () => {
 			const customStream = (() =>
 				createToolCallStreamResult([
 					{ name: "rg", arguments: { pattern: "test" } },
@@ -652,7 +652,7 @@ describe("Session", () => {
 			const result = await session.ask("Do something").result();
 
 			expect(result.error?.errorType).toBe("max_iterations");
-			expect(result.error?.isRetryable).toBe(false);
+			expect(result.error?.retryability).toBe("no");
 		});
 
 		test("provider error yields errorType 'provider_error'", async () => {
@@ -667,10 +667,10 @@ describe("Session", () => {
 			const result = await session.ask("Test").result();
 
 			expect(result.error?.errorType).toBe("provider_error");
-			expect(result.error?.isRetryable).toBeNull();
+			expect(result.error?.retryability).toBe("unknown");
 		});
 
-		test("empty response yields errorType 'empty_response' and isRetryable true", async () => {
+		test("empty response yields errorType 'empty_response' and retryability 'yes'", async () => {
 			const customStream = (() => ({
 				[Symbol.asyncIterator]: async function* () {
 					yield { type: "text_delta", delta: "" };
@@ -691,7 +691,7 @@ describe("Session", () => {
 			const result = await session.ask("Test").result();
 
 			expect(result.error?.errorType).toBe("empty_response");
-			expect(result.error?.isRetryable).toBe(true);
+			expect(result.error?.retryability).toBe("yes");
 		});
 
 		test("error steps include errorType and source derived from errorType", async () => {
@@ -706,7 +706,7 @@ describe("Session", () => {
 			if (errorSteps[0]?.type === "error") {
 				expect(errorSteps[0].errorType).toBe("aborted");
 				expect(errorSteps[0].source).toBe("library");
-				expect(errorSteps[0].isRetryable).toBe(false);
+				expect(errorSteps[0].retryability).toBe("no");
 			}
 		});
 	});
