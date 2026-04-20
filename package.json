@@ -1,6 +1,6 @@
 {
 	"name": "megasthenes",
-"module": "src/index.ts",
+	"module": "src/index.ts",
 	"type": "module",
 	"scripts": {
 		"format": "biome format --write .",
