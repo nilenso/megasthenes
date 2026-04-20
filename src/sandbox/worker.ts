@@ -170,22 +170,16 @@ async function runToolIsolated(
 // Async Clone State
 // =============================================================================
 
-type CloneStatus = "cloning" | "ready" | "failed";
-
-interface CloneJob {
-	status: CloneStatus;
+interface CloneJobBase {
 	url: string;
 	slug: string;
-	/** Set when status = "ready" */
-	sha?: string;
-	worktree?: string;
-	/** Set when status = "failed" */
-	error?: string;
-	/** Set when status = "failed" — programmatic error classification. */
-	errorType?: ErrorType;
 	startedAt: number;
-	finishedAt?: number;
 }
+
+type CloneJob =
+	| (CloneJobBase & { status: "cloning" })
+	| (CloneJobBase & { status: "ready"; sha: string; worktree: string; finishedAt: number })
+	| (CloneJobBase & { status: "failed"; error: string; errorType: ErrorType; finishedAt: number });
 
 /**
  * In-memory clone job tracker.
@@ -200,7 +194,7 @@ const JOB_TTL_MS = 10 * 60 * 1000;
 setInterval(() => {
 	const now = Date.now();
 	for (const [key, job] of cloneJobs) {
-		if (job.finishedAt && now - job.finishedAt > JOB_TTL_MS) {
+		if (job.status !== "cloning" && now - job.finishedAt > JOB_TTL_MS) {
 			cloneJobs.delete(key);
 		}
 	}
@@ -236,14 +230,18 @@ function friendlyCloneError(stderr: string, url: string): string {
 
 /**
  * Execute the clone/fetch + worktree setup in the background.
- * Updates the job entry in cloneJobs as it progresses.
+ * Replaces the job entry in cloneJobs as it transitions between states.
  */
 async function executeClone(jobKey: string, url: string, commitish: string): Promise<void> {
-	const job = cloneJobs.get(jobKey);
-	if (!job) return;
+	const started = cloneJobs.get(jobKey);
+	if (!started) return;
+	const base: CloneJobBase = { url: started.url, slug: started.slug, startedAt: started.startedAt };
 
-	const slug = job.slug;
-	const baseDir = repoDir(slug);
+	const markFailed = (error: string, errorType: ErrorType): void => {
+		cloneJobs.set(jobKey, { ...base, status: "failed", error, errorType, finishedAt: Date.now() });
+	};
+
+	const baseDir = repoDir(base.slug);
 	const bareDir = `${baseDir}/bare`;
 	const treesDir = `${baseDir}/trees`;
 
@@ -266,11 +264,8 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 				CLONE_TIMEOUT_MS,
 			);
 			if (exitCode !== 0) {
-				job.status = "failed";
-				job.error = friendlyCloneError(stderr, url);
-				job.errorType = "clone_failed";
-				job.finishedAt = Date.now();
 				console.error(`[sandbox:clone] clone failed for ${url}: ${stderr.slice(0, 200)}`);
+				markFailed(friendlyCloneError(stderr, url), "clone_failed");
 				return;
 			}
 		}
@@ -278,10 +273,7 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 		// Resolve commitish → SHA
 		const revParse = await runGitIsolated(["rev-parse", commitish], bareDir, baseDir);
 		if (revParse.exitCode !== 0) {
-			job.status = "failed";
-			job.error = `Cannot resolve commitish "${commitish}": ${revParse.stderr.slice(0, 300)}`;
-			job.errorType = "invalid_commitish";
-			job.finishedAt = Date.now();
+			markFailed(`Cannot resolve commitish "${commitish}": ${revParse.stderr.slice(0, 300)}`, "invalid_commitish");
 			return;
 		}
 		const sha = revParse.stdout.trim();
@@ -293,25 +285,16 @@ async function executeClone(jobKey: string, url: string, commitish: string): Pro
 		if (!worktreeExists) {
 			const wt = await runGitIsolated(["worktree", "add", worktree, sha], bareDir, baseDir);
 			if (wt.exitCode !== 0) {
-				job.status = "failed";
-				job.error = `git worktree add failed: ${wt.stderr.slice(0, 300)}`;
-				job.errorType = "clone_failed";
-				job.finishedAt = Date.now();
+				markFailed(`git worktree add failed: ${wt.stderr.slice(0, 300)}`, "clone_failed");
 				return;
 			}
 		}
 
-		job.status = "ready";
-		job.sha = sha;
-		job.worktree = worktree;
-		job.finishedAt = Date.now();
-		console.info(`[sandbox:clone] ready: ${url} → ${slug} @ ${shortSha} (${Date.now() - job.startedAt}ms)`);
+		cloneJobs.set(jobKey, { ...base, status: "ready", sha, worktree, finishedAt: Date.now() });
+		console.info(`[sandbox:clone] ready: ${url} → ${base.slug} @ ${shortSha} (${Date.now() - base.startedAt}ms)`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		job.status = "failed";
-		job.error = msg;
-		job.errorType = "clone_failed";
-		job.finishedAt = Date.now();
+		markFailed(msg, "clone_failed");
 		console.error(`[sandbox:clone] exception for ${url}: ${msg}`);
 	}
 }
@@ -334,19 +317,21 @@ function handleClone(body: CloneRequest): Response {
 	// Check for existing job
 	const existing = cloneJobs.get(jobKey);
 	if (existing) {
-		if (existing.status === "ready") {
-			return Response.json({
-				ok: true,
-				status: "ready",
-				slug,
-				sha: existing.sha,
-				worktree: existing.worktree,
-			});
+		switch (existing.status) {
+			case "ready":
+				return Response.json({
+					ok: true,
+					status: "ready",
+					slug,
+					sha: existing.sha,
+					worktree: existing.worktree,
+				});
+			case "cloning":
+				return Response.json({ ok: true, status: "cloning", slug });
+			case "failed":
+				// allow retry by falling through to create a new job
+				break;
 		}
-		if (existing.status === "cloning") {
-			return Response.json({ ok: true, status: "cloning", slug });
-		}
-		// "failed" — allow retry by falling through to create a new job
 	}
 
 	// Create new job
@@ -376,33 +361,30 @@ function handleCloneStatus(slug: string, commitish: string): Response {
 		return Response.json({ ok: false, error: "No clone job found for this repo" }, { status: 404 });
 	}
 
-	if (job.status === "ready") {
-		return Response.json({
-			ok: true,
-			status: "ready",
-			slug: job.slug,
-			sha: job.sha,
-			worktree: job.worktree,
-		});
+	switch (job.status) {
+		case "ready":
+			return Response.json({
+				ok: true,
+				status: "ready",
+				slug: job.slug,
+				sha: job.sha,
+				worktree: job.worktree,
+			});
+		case "failed":
+			return Response.json({
+				ok: false,
+				status: "failed",
+				error: job.error,
+				errorType: job.errorType,
+			});
+		case "cloning":
+			return Response.json({
+				ok: true,
+				status: "cloning",
+				slug: job.slug,
+				elapsedMs: Date.now() - job.startedAt,
+			});
 	}
-
-	if (job.status === "failed") {
-		return Response.json({
-			ok: false,
-			status: "failed",
-			error: job.error,
-			errorType: job.errorType,
-		});
-	}
-
-	// Still cloning
-	const elapsed = Date.now() - job.startedAt;
-	return Response.json({
-		ok: true,
-		status: "cloning",
-		slug: job.slug,
-		elapsedMs: elapsed,
-	});
 }
 
 // =============================================================================
