@@ -31,18 +31,7 @@ const client = new Client({
 |-------|------|-------------|
 | `baseUrl` | `string` | HTTP endpoint of the sandbox worker. Required. |
 | `timeoutMs` | `number` | Request timeout in ms. Required. |
-| `secret` | `string` | Bearer token for API authentication. Optional. |
-
-If you've configured [authentication](#authentication), pass the secret in the client config:
-
-```ts
-const client = new Client({
-  sandbox: {
-    baseUrl: "http://localhost:8080",
-    secret: "your-secret-here",
-  },
-});
-```
+| `secret` | `string` | Bearer token for [API authentication](#authentication). Optional. |
 
 When sandbox mode is enabled:
 
