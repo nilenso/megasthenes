@@ -29,6 +29,9 @@ jobs:
       - name: Check (lint + format)
         run: bunx biome check .
 
+      - name: Type check
+        run: bunx tsc --noEmit
+
       - name: Test
         run: bun test
 
