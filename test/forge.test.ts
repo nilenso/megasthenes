@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { cleanupRepo, connectRepo, type Forge, type Repo } from "../src/forge";
+import { cleanupRepo, connectRepo, type Forge, inferForge, type Repo } from "../src/forge";
 
 // =============================================================================
 // Test Helpers
@@ -131,7 +131,6 @@ describe("forge", () => {
 		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "tmp"));
 		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "var"));
 		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "testuser"));
-		cacheCleanupPaths.push(join(home, ".megasthenes", "repos", "gitlab-examples"));
 	});
 
 	afterAll(async () => {
@@ -397,20 +396,20 @@ describe("forge", () => {
 		});
 	});
 
-	describe("inferForge (indirect)", () => {
-		test("github.com URL infers github forge (error is not about forge inference)", async () => {
-			// connectRepo will fail (repo doesn't exist), but the error must NOT be
-			// about forge inference — proving inferForge("github.com") returned "github"
-			const err = await connectRepo("https://github.com/testuser/testrepo").catch((e: unknown) => e);
-			expect(err).toBeInstanceOf(Error);
-			expect((err as Error).message).not.toContain("Cannot infer forge");
+	describe("inferForge", () => {
+		test("github.com URL infers github forge", () => {
+			expect(inferForge("https://github.com/owner/repo")).toBe("github");
+			expect(inferForge("https://github.com/owner/repo.git")).toBe("github");
 		});
 
-		test("gitlab.com URL infers gitlab forge (public repo connects without explicit forge option)", async () => {
-			const repo = await connectRepo("https://gitlab.com/gitlab-examples/ci-debug-trace.git");
-			expect(repo.forge.name).toBe("gitlab");
-			expect(repo.url).toContain("gitlab.com");
-		}, 30_000);
+		test("gitlab.com URL infers gitlab forge", () => {
+			expect(inferForge("https://gitlab.com/owner/repo")).toBe("gitlab");
+			expect(inferForge("https://gitlab.com/owner/repo.git")).toBe("gitlab");
+		});
+
+		test("unknown domain returns null", () => {
+			expect(inferForge("https://git.example.com/user/repo")).toBeNull();
+		});
 
 		test("custom domain without forge option throws 'Cannot infer forge'", async () => {
 			await expect(connectRepo("https://git.example.com/user/repo")).rejects.toThrow("Cannot infer forge");

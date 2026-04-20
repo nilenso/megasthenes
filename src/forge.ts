@@ -94,7 +94,7 @@ const forges: Record<ForgeName, Forge> = {
 	gitlab: GitLabForge,
 };
 
-function inferForge(repoUrl: string): ForgeName | null {
+export function inferForge(repoUrl: string): ForgeName | null {
 	const url = new URL(repoUrl);
 	if (url.hostname === "github.com") return "github";
 	if (url.hostname === "gitlab.com") return "gitlab";
