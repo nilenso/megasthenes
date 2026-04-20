@@ -43,9 +43,16 @@ RUN ARCH=$(uname -m) \
 # Copy application files — layout must match import paths:
 #   worker.ts imports "../tool-commands" → /app/tool-commands.ts
 #   worker.ts imports "./isolation"      → /app/sandbox/isolation/index.ts
+#   tool-commands.ts imports "./tools"   → /app/tools.ts (for TypeBox-backed arg validation)
 COPY sandbox/worker.ts /app/sandbox/worker.ts
 COPY sandbox/isolation/index.ts /app/sandbox/isolation/index.ts
 COPY tool-commands.ts /app/tool-commands.ts
+COPY tools.ts /app/tools.ts
+
+# Install the TypeBox runtime used by tools.ts for argument validation.
+# pi-ai is imported type-only in tools.ts, so it doesn't need to be installed.
+WORKDIR /app
+RUN bun add @sinclair/typebox@0.34.49
 
 USER forge
 WORKDIR /home/forge

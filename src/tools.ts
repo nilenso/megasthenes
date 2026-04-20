@@ -1,6 +1,5 @@
 import type { Tool } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
-import { buildToolCommand } from "./tool-commands";
+import { buildToolCommand, fdSchema, gitSchema, lsSchema, readSchema, rgSchema } from "./tool-commands";
 
 /** External binaries that must be installed for local (non-sandbox) execution. */
 const REQUIRED_BINARIES = ["rg", "fd"] as const;
@@ -42,7 +41,7 @@ export async function validateRequiredTools(): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Tool definitions (LLM-facing schema)
+// Tool definitions (LLM-facing catalog)
 // ---------------------------------------------------------------------------
 
 export const tools: Tool[] = [
@@ -50,102 +49,29 @@ export const tools: Tool[] = [
 		name: "rg",
 		description:
 			"Search for a pattern in files using ripgrep. Defaults to respecting .gitignore and hidden/binary files. Supports relevance filters and output limits.",
-		parameters: Type.Object({
-			pattern: Type.String({ description: "The regex pattern to search for" }),
-			glob: Type.Optional(
-				Type.String({
-					description: "File glob pattern to filter files (e.g., '*.ts', '**/*.json')",
-				}),
-			),
-			max_count: Type.Optional(Type.Number({ description: "Max matching lines per file" })),
-			max_results: Type.Optional(
-				Type.Number({
-					description: "Max total matches (global), enforced via head",
-				}),
-			),
-			word: Type.Optional(Type.Boolean({ description: "Match whole words only (-w)" })),
-		}),
+		parameters: rgSchema,
 	},
 	{
 		name: "fd",
 		description:
 			"Find files by name pattern using fd. Returns matching file paths. Defaults to respecting .gitignore and excluding hidden files. Supports relevant filters and output limits.",
-		parameters: Type.Object({
-			pattern: Type.String({
-				description: "The regex pattern to match file names against (use --glob for glob patterns)",
-			}),
-			type: Type.Optional(
-				Type.Union([Type.Literal("f"), Type.Literal("d"), Type.Literal("l"), Type.Literal("x")], {
-					description: "Filter by type: 'f' for files, 'd' for directories, 'l' for symlinks, 'x' for executables",
-				}),
-			),
-			extension: Type.Optional(
-				Type.String({
-					description: "Filter by file extension (e.g., 'ts', 'json'). Can be comma-separated for multiple extensions.",
-				}),
-			),
-			max_depth: Type.Optional(Type.Number({ description: "Maximum directory depth to search" })),
-			max_results: Type.Optional(Type.Number({ description: "Maximum number of results to return" })),
-			hidden: Type.Optional(Type.Boolean({ description: "Include hidden files and directories" })),
-			glob: Type.Optional(Type.Boolean({ description: "Use glob pattern instead of regex" })),
-			exclude: Type.Optional(
-				Type.String({
-					description: "Exclude entries matching this glob pattern (e.g., 'node_modules' or '*.pyc')",
-				}),
-			),
-			full_path: Type.Optional(
-				Type.Boolean({
-					description: "Match pattern against full path, not just filename",
-				}),
-			),
-		}),
+		parameters: fdSchema,
 	},
 	{
 		name: "ls",
 		description: "List files and directories in a given path.",
-		parameters: Type.Object({
-			path: Type.Optional(
-				Type.String({
-					description: "Path to list, relative to repository root. Defaults to root if not specified.",
-				}),
-			),
-		}),
+		parameters: lsSchema,
 	},
 	{
 		name: "read",
 		description: "Read the entire contents of a file. Each line is prefixed with its line number.",
-		parameters: Type.Object({
-			path: Type.String({
-				description: "Path to the file, relative to repository root",
-			}),
-		}),
+		parameters: readSchema,
 	},
 	{
 		name: "git",
 		description:
 			"Run read-only git commands to explore repository history. Allowed subcommands: log, show, blame, diff, shortlog, describe, rev-parse, ls-tree, cat-file.",
-		parameters: Type.Object({
-			command: Type.Union(
-				[
-					Type.Literal("log"),
-					Type.Literal("show"),
-					Type.Literal("blame"),
-					Type.Literal("diff"),
-					Type.Literal("shortlog"),
-					Type.Literal("describe"),
-					Type.Literal("rev-parse"),
-					Type.Literal("ls-tree"),
-					Type.Literal("cat-file"),
-				],
-				{ description: "The git subcommand to run" },
-			),
-			args: Type.Optional(
-				Type.Array(Type.String(), {
-					description:
-						"Additional arguments for the git command (e.g., ['--oneline', '-n', '10'] for log, or ['HEAD~5..HEAD'] for diff)",
-				}),
-			),
-		}),
+		parameters: gitSchema,
 	},
 ];
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildFdCommand, buildRgCommand } from "../src/tool-commands";
+import { buildFdCommand, buildRgCommand, buildToolCommand } from "../src/tool-commands";
 import { executeTool, overrideToolAvailability, validateRequiredTools } from "../src/tools";
 
 let repoDir: string;
@@ -582,5 +582,146 @@ describe("validateRequiredTools", () => {
 		overrideToolAvailability("fd", false);
 		const missing = await validateRequiredTools();
 		expect(missing).toEqual(["rg", "fd"]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// buildToolCommand — schema validation
+// ---------------------------------------------------------------------------
+// Our TypeBox schemas do not set `additionalProperties: false`, so extra
+// unknown fields on the LLM's tool call are ignored rather than rejected.
+// Missing required fields and wrong types must fail fast with an actionable
+// error instead of becoming `undefined`/`NaN` in the spawned command.
+describe("buildToolCommand validation", () => {
+	const cwd = "/tmp";
+
+	test("rg: missing required pattern returns validation error", () => {
+		const result = buildToolCommand("rg", {}, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("rg");
+			expect(result.error).toContain("pattern");
+		}
+	});
+
+	test("rg: pattern with wrong type returns validation error", () => {
+		const result = buildToolCommand("rg", { pattern: 123 }, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("rg");
+			expect(result.error).toContain("pattern");
+		}
+	});
+
+	test("fd: missing required pattern returns validation error", () => {
+		const result = buildToolCommand("fd", {}, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("fd");
+			expect(result.error).toContain("pattern");
+		}
+	});
+
+	test("read: missing required path returns validation error", () => {
+		const result = buildToolCommand("read", {}, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("read");
+			expect(result.error).toContain("path");
+		}
+	});
+
+	test("git: missing required command returns validation error", () => {
+		const result = buildToolCommand("git", {}, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("git");
+			expect(result.error).toContain("command");
+		}
+	});
+
+	test("git: command with disallowed literal value fails validation", () => {
+		// 'rm' is not one of the Type.Literal union members, so validation rejects it
+		// before the allowlist check in buildGit.
+		const result = buildToolCommand("git", { command: "rm" }, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("git");
+		}
+	});
+
+	test("extra unexpected fields are ignored, not rejected", () => {
+		// TypeBox Object() defaults to additionalProperties:true, and we rely on that
+		// so the LLM can pass harmless extras without the call failing.
+		const result = buildToolCommand("rg", { pattern: "foo", unknown_field: "bar" }, cwd);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.cmd).toContain("foo");
+			expect(result.cmd).not.toContain("unknown_field");
+			expect(result.cmd).not.toContain("bar");
+		}
+	});
+
+	test("valid rg args produce the same command as before the refactor", () => {
+		const result = buildToolCommand("rg", { pattern: "foo", glob: "*.ts", max_count: 5, word: true }, cwd);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.cmd).toEqual(["rg", "--line-number", "--max-count", "5", "foo", "--glob", "*.ts", "-w"]);
+		}
+	});
+
+	test("valid fd args produce the expected command", () => {
+		const result = buildToolCommand(
+			"fd",
+			{ pattern: "foo", type: "f", extension: "ts", max_depth: 3, hidden: true },
+			cwd,
+		);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.cmd).toEqual(["fd", "--type", "f", "--hidden", "--max-depth", "3", "--extension", "ts", "foo"]);
+		}
+	});
+
+	test("valid git args produce the expected command", () => {
+		const result = buildToolCommand("git", { command: "log", args: ["--oneline", "-n", "5"] }, cwd);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.cmd).toEqual(["git", "log", "--oneline", "-n", "5"]);
+		}
+	});
+
+	test("valid ls args with no path default to '.'", () => {
+		const result = buildToolCommand("ls", {}, cwd);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.cmd[0]).toBe("ls");
+			expect(result.cmd[1]).toBe("-la");
+			expect(result.cmd[2]).toBe(cwd); // cwd resolved as '.'
+		}
+	});
+
+	test("fd: wrong type for max_depth (string instead of number) returns validation error", () => {
+		const result = buildToolCommand("fd", { pattern: "foo", max_depth: "deep" }, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("fd");
+			expect(result.error).toContain("max_depth");
+		}
+	});
+
+	test("git: args field with wrong element type returns validation error", () => {
+		const result = buildToolCommand("git", { command: "log", args: [1, 2, 3] }, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("git");
+		}
+	});
+
+	test("unknown tool name returns validation error (not a shell command)", () => {
+		const result = buildToolCommand("rmrf", { pattern: "foo" }, cwd);
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toContain("Unknown tool");
+		}
 	});
 });

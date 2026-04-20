@@ -408,7 +408,9 @@ describe("forge", () => {
 				.replace(/^\//, "")
 				.replace(/\.git$/, "")
 				.split("/");
-			const expectedSegment = join(parts[0], parts[1], "repo");
+			const [username, reponame] = parts;
+			if (!username || !reponame) throw new Error(`unexpected URL shape: ${url.pathname}`);
+			const expectedSegment = join(username, reponame, "repo");
 
 			expect(repo.cachePath).toContain(expectedSegment);
 		});
@@ -422,13 +424,14 @@ describe("forge", () => {
 				.replace(/^\//, "")
 				.replace(/\.git$/, "")
 				.split("/");
-			const parsedReponame = parts[1];
+			const [username, reponame] = parts;
+			if (!username || !reponame) throw new Error(`unexpected URL shape: ${url.pathname}`);
 
 			// The parsed reponame should not end with .git
-			expect(parsedReponame).not.toMatch(/\.git$/);
+			expect(reponame).not.toMatch(/\.git$/);
 
 			const home = homedir();
-			const expectedCachePath = resolve(home, ".megasthenes", "repos", parts[0], parsedReponame, "repo");
+			const expectedCachePath = resolve(home, ".megasthenes", "repos", username, reponame, "repo");
 			expect(repo.cachePath).toBe(expectedCachePath);
 		});
 	});
