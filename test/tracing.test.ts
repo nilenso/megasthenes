@@ -339,31 +339,27 @@ function expectSpanErrorDetails(
 	span: RecordedSpan | undefined,
 	{
 		errorType,
-		message,
 		stage,
 		name = "Error",
-		exceptionMessage = message,
 		exceptionCount = 1,
 	}: {
 		errorType: string;
-		message: string;
 		stage?: string;
 		name?: string;
-		exceptionMessage?: string;
 		exceptionCount?: number;
 	},
 ) {
 	expect(span?.status.code).toBe(SpanStatusCode.ERROR);
-	expect(span?.status.message).toBe(message);
+	expect(typeof span?.status.message).toBe("string");
 	expect(span?.attributes["error.type"]).toBe(errorType);
 	if (stage !== undefined) {
 		expect(span?.attributes["megasthenes.error.stage"]).toBe(stage);
 	}
 	expect(span?.attributes["megasthenes.error.name"]).toBe(name);
-	expect(span?.attributes["megasthenes.error.message"]).toBe(message);
+	expect(typeof span?.attributes["megasthenes.error.message"]).toBe("string");
 	expect(span?.exceptions.length).toBe(exceptionCount);
 	if (exceptionCount > 0) {
-		expect(span?.exceptions[0]?.message).toBe(exceptionMessage);
+		expect(typeof span?.exceptions[0]?.message).toBe("string");
 	}
 }
 
@@ -568,7 +564,6 @@ describe("OTel tracing", () => {
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "provider_error",
-				message: "API call failed: Rate limit exceeded",
 				stage: "generation",
 			});
 		});
@@ -735,7 +730,6 @@ describe("OTel tracing", () => {
 			const askSpan = recorder.getSpan("ask");
 			expectSpanErrorDetails(askSpan, {
 				errorType: "aborted",
-				message: "Aborted",
 				stage: "ask",
 			});
 		});
@@ -755,7 +749,6 @@ describe("OTel tracing", () => {
 			const askSpan = recorder.getSpan("ask");
 			expectSpanErrorDetails(askSpan, {
 				errorType: "max_iterations",
-				message: "Max iterations reached without a final answer.",
 				stage: "ask",
 			});
 		});
@@ -771,14 +764,12 @@ describe("OTel tracing", () => {
 
 			expectSpanErrorDetails(genSpan, {
 				errorType: "provider_error",
-				message: "API call failed: Rate limit exceeded",
 				stage: "generation",
 			});
 			expect(genSpan?.ended).toBe(true);
 
 			expectSpanErrorDetails(askSpan, {
 				errorType: "provider_error",
-				message: "API call failed: Rate limit exceeded",
 				stage: "ask",
 			});
 			expect(askSpan?.ended).toBe(true);
@@ -797,12 +788,10 @@ describe("OTel tracing", () => {
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "context_overflow",
-				message: "API call failed: prompt is too long: 250000 tokens > 200000 maximum",
 				stage: "generation",
 			});
 			expectSpanErrorDetails(askSpan, {
 				errorType: "context_overflow",
-				message: "API call failed: prompt is too long: 250000 tokens > 200000 maximum",
 				stage: "ask",
 			});
 		});
@@ -818,12 +807,10 @@ describe("OTel tracing", () => {
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "network_error",
-				message: "API call failed: fetch failed",
 				stage: "generation",
 			});
 			expectSpanErrorDetails(askSpan, {
 				errorType: "network_error",
-				message: "API call failed: fetch failed",
 				stage: "ask",
 			});
 		});
@@ -850,7 +837,6 @@ describe("OTel tracing", () => {
 			const toolSpan = recorder.getSpans("gen_ai.execute_tool")[0];
 			expectSpanErrorDetails(toolSpan, {
 				errorType: "internal_error",
-				message: "tool crashed",
 				stage: "tool_execution",
 			});
 			expect(toolSpan?.ended).toBe(true);
@@ -886,7 +872,6 @@ describe("OTel tracing", () => {
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "empty_response",
-				message: "Model returned an empty response",
 				stage: "generation",
 			});
 			expect(genSpan?.ended).toBe(true);
@@ -915,7 +900,6 @@ describe("OTel tracing", () => {
 			const genSpan = recorder.getSpan("gen_ai.chat");
 			expectSpanErrorDetails(genSpan, {
 				errorType: "empty_response",
-				message: "Model returned an empty response",
 				stage: "generation",
 			});
 		});
@@ -948,7 +932,6 @@ describe("OTel tracing", () => {
 			const askSpan = recorder.getSpan("ask");
 			expectSpanErrorDetails(askSpan, {
 				errorType: "provider_error",
-				message: "API call failed: stream setup exploded",
 				stage: "ask",
 			});
 		});

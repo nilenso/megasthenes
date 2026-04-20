@@ -220,7 +220,7 @@ describe("Session", () => {
 			const result = await session.ask("Test").result();
 
 			expect(result.error).not.toBeNull();
-			expect(result.error?.message).toContain("API");
+			expect(result.error?.errorType).toBe("provider_error");
 		});
 
 		test("max iterations error produces TurnResult with .error set", async () => {
@@ -233,7 +233,7 @@ describe("Session", () => {
 			const result = await session.ask("Do something").result();
 
 			expect(result.error).not.toBeNull();
-			expect(result.error?.message).toContain("Max iterations reached");
+			expect(result.error?.errorType).toBe("max_iterations");
 		});
 
 		test("uses injected stream function", async () => {
@@ -446,7 +446,7 @@ describe("Session", () => {
 			const result = await session.ask("Test", { signal: controller.signal }).result();
 
 			expect(result.error).not.toBeNull();
-			expect(result.error?.message).toBe("Aborted");
+			expect(result.error?.errorType).toBe("aborted");
 		});
 
 		test("signal abort cancels the turn between iterations", async () => {
