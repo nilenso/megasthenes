@@ -14,7 +14,7 @@
 		"postinstall": "patch -p0 -N -d node_modules/@mariozechner/pi-ai < patches/pi-ai-output-config.patch || true"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.8",
+		"@biomejs/biome": "^2.4.12",
 		"@types/bun": "^1.3.11"
 	},
 	"peerDependencies": {

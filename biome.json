@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
 	"files": {
 		"includes": [
 			"**",
@@ -32,18 +32,8 @@
 					"options": {
 						"strictCase": false,
 						"conventions": [
-							{
-								"selector": { "kind": "objectLiteralProperty" },
-								"match": ".*"
-							},
-							{
-								"selector": { "kind": "typeProperty" },
-								"match": ".*"
-							},
-							{
-								"selector": { "kind": "enumMember" },
-								"match": ".*"
-							}
+							{ "selector": { "kind": "objectLiteralProperty" }, "match": ".*" },
+							{ "selector": { "kind": "typeProperty" }, "match": ".*" }
 						]
 					}
 				}
