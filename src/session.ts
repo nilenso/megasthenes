@@ -13,7 +13,7 @@ import { AskStreamImpl } from "./ask-stream";
 import { type CompactionSettings, maybeCompact } from "./compaction";
 import type { ThinkingConfig } from "./config";
 import { MegasthenesError } from "./errors";
-import { cleanupWorktree, type Repo } from "./forge";
+import { cleanupRepo, type Repo } from "./forge";
 import { consoleLogger, type Logger } from "./logger";
 import { processStreamToEvents, type StreamFn } from "./stream-processor";
 import {
@@ -100,7 +100,7 @@ export interface SessionConfig {
  * - Streaming responses via AskStream (AsyncIterable + .result())
  * - Tool execution (file reading, code search, etc.)
  * - Conversation branching via afterTurn
- * - Automatic cleanup of git worktrees on close
+ * - Automatic release of forge-managed resources on close
  *
  * @example
  * ```ts
@@ -263,17 +263,15 @@ export class Session {
 	 * }
 	 * ```
 	 *
-	 * Also removes the git worktree associated with the session.
+	 * Also releases the forge-managed resources associated with the session.
 	 * The session cannot be used after closing. Safe to call multiple times.
 	 */
 	async close(): Promise<void> {
 		if (this.#closed) return;
 		this.#closed = true;
 
-		const success = await cleanupWorktree(this.repo);
-		if (!success) {
-			this.#logger.error("Failed to cleanup worktree", { path: this.repo.localPath });
-		}
+		const cleanup = await cleanupRepo(this.repo);
+		if (!cleanup.ok) this.#logger.error("session cleanup failed", cleanup.details);
 		if (this.#traceRoot) {
 			endRootAskSpan(this.#traceRoot.rootSpan);
 		}

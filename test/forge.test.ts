@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { cleanupWorktree, connectRepo, type Forge } from "../src/forge";
+import { cleanupRepo, connectRepo, type Forge, type Repo } from "../src/forge";
 
 // =============================================================================
 // Test Helpers
@@ -263,34 +263,54 @@ describe("forge", () => {
 		});
 	});
 
-	describe("cleanupWorktree", () => {
+	describe("cleanupRepo", () => {
 		test("removes worktree successfully", async () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 
 			const readmeBefore = await readFile(join(repo.localPath, "README.md"), "utf-8");
 			expect(readmeBefore).toBeDefined();
 
-			const success = await cleanupWorktree(repo);
-			expect(success).toBe(true);
+			const result = await cleanupRepo(repo);
+			expect(result.ok).toBe(true);
 
 			expect(readFile(join(repo.localPath, "README.md"), "utf-8")).rejects.toThrow();
 		});
 
-		test("returns false for non-existent worktree", async () => {
+		test("returns { ok: true } when worktree is already cleaned up (idempotent)", async () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 
-			await cleanupWorktree(repo);
-			const success = await cleanupWorktree(repo);
+			await cleanupRepo(repo);
+			const result = await cleanupRepo(repo);
 
-			expect(success).toBe(false);
+			// Second cleanup: git says "is not a working tree" — classified as success
+			// so repeated calls don't masquerade as leaks.
+			expect(result.ok).toBe(true);
+		});
+
+		test("returns failure details (path + exit info) on unexpected error", async () => {
+			const repo = await connectRepo(repoUrl, { forge: "github" });
+			const nonGitDir = await mkdtemp(join(tmpdir(), "forge-test-nongit-"));
+			const broken: Repo = { ...repo, cachePath: nonGitDir };
+
+			const result = await cleanupRepo(broken);
+
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("unreachable: narrowed by assertion above");
+			const details = result.details as { path: string; exitCode: number; stderr: string };
+			expect(details.path).toBe(broken.localPath);
+			expect(typeof details.exitCode).toBe("number");
+			expect(details.exitCode).not.toBe(0);
+			expect(details.stderr).toMatch(/not a git repository/i);
+
+			await rm(nonGitDir, { recursive: true, force: true });
 		});
 
 		test("after cleanup, repo.localPath directory no longer exists on disk", async () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 			expect(existsSync(repo.localPath)).toBe(true);
 
-			const success = await cleanupWorktree(repo);
-			expect(success).toBe(true);
+			const result = await cleanupRepo(repo);
+			expect(result.ok).toBe(true);
 			expect(existsSync(repo.localPath)).toBe(false);
 		});
 
@@ -301,8 +321,8 @@ describe("forge", () => {
 			expect(existsSync(repo.localPath)).toBe(false);
 
 			// git worktree remove --force succeeds even if the directory is gone
-			const success = await cleanupWorktree(repo);
-			expect(success).toBe(true);
+			const result = await cleanupRepo(repo);
+			expect(result.ok).toBe(true);
 
 			// After cleanup, the worktree is also removed from git's tracking
 			const proc = Bun.spawn(["git", "worktree", "list"], {
@@ -318,7 +338,7 @@ describe("forge", () => {
 		test("worktree is absent from git worktree list after cleanup", async () => {
 			const repo = await connectRepo(repoUrl, { forge: "github" });
 
-			await cleanupWorktree(repo);
+			await cleanupRepo(repo);
 
 			const proc = Bun.spawn(["git", "worktree", "list"], {
 				cwd: repo.cachePath,
