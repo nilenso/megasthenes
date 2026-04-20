@@ -151,35 +151,6 @@ export class TurnResultBuilder {
 		}
 	}
 
-	/** Add an iteration_start step (called by the session layer). */
-	addIterationStart(index: number): void {
-		this.#steps.push({ type: "iteration_start", index });
-	}
-
-	/** Set the turn error (called by the session layer). */
-	setError(errorType: ErrorType, message: string, retryability: Retryability, details?: unknown): void {
-		this.#error = { errorType, message, retryability, details };
-		this.#steps.push({
-			type: "error",
-			errorType,
-			source: errorSource(errorType),
-			message,
-			retryability,
-			details,
-		});
-	}
-
-	/** Accumulate token usage (called by the session layer after each iteration). */
-	addUsage(usage: Partial<TokenUsage>): void {
-		this.#usage = {
-			inputTokens: this.#usage.inputTokens + (usage.inputTokens ?? 0),
-			outputTokens: this.#usage.outputTokens + (usage.outputTokens ?? 0),
-			totalTokens: this.#usage.totalTokens + (usage.totalTokens ?? 0),
-			cacheReadTokens: this.#usage.cacheReadTokens + (usage.cacheReadTokens ?? 0),
-			cacheWriteTokens: this.#usage.cacheWriteTokens + (usage.cacheWriteTokens ?? 0),
-		};
-	}
-
 	/** Build the final immutable TurnResult. */
 	build(): TurnResult {
 		const defaultMetadata: TurnMetadata = {

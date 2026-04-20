@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
 	type Api,
+	type AssistantMessage,
 	type Context,
 	getModel,
 	type Message,
@@ -37,10 +38,13 @@ import { reconstructContext } from "./turns-to-messages";
 import type {
 	AskOptions,
 	AskStream,
+	ErrorType,
 	ModelConfig,
 	RepoConfig,
+	Retryability,
 	StreamEvent,
 	TokenUsage,
+	TurnError,
 	TurnMetadata,
 	TurnResult,
 } from "./types";
@@ -55,6 +59,63 @@ function formatToolExecutionError(toolName: string, error: unknown): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const detail = message.trim() || "Unknown error";
 	return `[ERROR] Tool execution failed for ${toolName}: ${detail}`;
+}
+
+/** Accumulator for per-turn usage totals across iterations. */
+interface UsageAccumulator {
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens: number;
+	cacheWriteTokens: number;
+}
+
+function accumulateUsage(acc: UsageAccumulator, usage: AssistantMessage["usage"]): void {
+	if (!usage) return;
+	acc.inputTokens += usage.input ?? 0;
+	acc.outputTokens += usage.output ?? 0;
+	acc.cacheReadTokens += usage.cacheRead ?? 0;
+	acc.cacheWriteTokens += usage.cacheWrite ?? 0;
+}
+
+/** Shape of a tool call as consumed by Session.#executeToolCalls. */
+type ClassifiedToolCall = { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
+
+/**
+ * Classify what to do next given the model's final response for an iteration.
+ * Pure: no logging, tracing, mutation, or stream emission. Unit-testable.
+ */
+export type ResponseClassification =
+	| { kind: "tool_calls"; toolCalls: ClassifiedToolCall[] }
+	| { kind: "final"; text: string }
+	| { kind: "empty" };
+
+export function classifyResponse(response: AssistantMessage): ResponseClassification {
+	const toolCalls = response.content.filter((b): b is ClassifiedToolCall => b.type === "toolCall");
+	if (toolCalls.length > 0) return { kind: "tool_calls", toolCalls };
+
+	const text = response.content
+		.filter((b): b is { type: "text"; text: string } => b.type === "text")
+		.map((b) => b.text)
+		.join("\n");
+	if (!text.trim()) return { kind: "empty" };
+	return { kind: "final", text };
+}
+
+/** Describes how a turn ended, for #terminateTurn. Absence means success. */
+interface TurnFailure {
+	errorType: ErrorType;
+	message: string;
+	retryability: Retryability;
+	/** Preserve an original stream-provided error event (with its `details`) instead of reconstructing. */
+	existingEvent?: TurnError;
+}
+
+/** Per-turn stable context threaded through the #doAsk state machine. */
+interface TurnContext {
+	readonly askSpan: import("@opentelemetry/api").Span;
+	readonly turnId: string;
+	readonly startedAt: number;
+	readonly turnOverrides: { model: Model<Api>; maxIterations: number; thinking?: ThinkingConfig };
 }
 
 // =============================================================================
@@ -300,14 +361,19 @@ export class Session {
 	): AsyncGenerator<StreamEvent> {
 		let askSpan: import("@opentelemetry/api").Span | undefined;
 		let askSpanEnded = false;
-		const totalUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+		// Outer-scoped counters so the catch/finally safety net can read them
+		// even if the main body bails before they reach #terminateTurn.
+		const totalUsage: UsageAccumulator = {
+			inputTokens: 0,
+			outputTokens: 0,
+			cacheReadTokens: 0,
+			cacheWriteTokens: 0,
+		};
 		let totalToolCalls = 0;
 
 		try {
-			// Serialize with any previous ask call
 			await prevPending;
 
-			// If afterTurn is specified, rebuild context from that turn's snapshot
 			if (options?.afterTurn) {
 				const snapshot = this.#turnMessages.get(options.afterTurn);
 				if (snapshot) {
@@ -315,19 +381,17 @@ export class Session {
 				}
 			}
 
-			// Check for abort before starting
+			// Pre-turn-start abort: yield only the error event (no turn_start/turn_end).
 			if (options?.signal?.aborted) {
 				yield { type: "error", errorType: "aborted", message: "Aborted", retryability: "no" };
 				return;
 			}
 
-			// Resolve per-turn overrides (model, maxIterations, thinking)
 			const turnModel = options?.model
 				? (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(options.model.provider, options.model.id)
 				: this.#config.model;
 			const turnMaxIterations = options?.maxIterations ?? this.#config.maxIterations;
 			const turnThinking = options?.thinking ?? this.#config.thinking;
-
 			const modelId = `${turnModel.provider}/${turnModel.id}`;
 			const turnOverrides = { model: turnModel, maxIterations: turnMaxIterations, thinking: turnThinking };
 
@@ -357,53 +421,19 @@ export class Session {
 						systemPrompt: this.#context.systemPrompt,
 					});
 
-			// Compaction (uses the turn model, not the session default)
-			const newQuestionMessage: Message = { role: "user", content: prompt, timestamp: Date.now() };
-			const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
+			yield* this.#runCompaction(askSpan, prompt, turnModel);
 
-			const compactionSpan = startCompactionSpan(askSpan);
-			try {
-				const compactionResult = await maybeCompact(turnModel, messagesWithQuestion, this.#compactionSummary);
-				if (compactionResult.wasCompacted) {
-					this.#context.messages = compactionResult.messages;
-					this.#compactionSummary = compactionResult.summary;
-					endCompactionSpan(compactionSpan, {
-						wasCompacted: true,
-						tokensBefore: compactionResult.tokensBefore,
-						tokensAfter: compactionResult.tokensAfter,
-					});
-					yield {
-						type: "compaction",
-						summary: compactionResult.summary ?? "",
-						firstKeptOrdinal: compactionResult.firstKeptOrdinal,
-						tokensBefore: compactionResult.tokensBefore,
-						tokensAfter: compactionResult.tokensAfter,
-						readFiles: compactionResult.readFiles,
-						modifiedFiles: compactionResult.modifiedFiles,
-					};
-				} else {
-					this.#context.messages.push(newQuestionMessage);
-					endCompactionSpan(compactionSpan, { wasCompacted: false });
-				}
-			} catch (compactionError) {
-				this.#context.messages.push(newQuestionMessage);
-				endCompactionSpanWithError(compactionSpan, compactionError);
-			}
-
+			const ctx: TurnContext = { askSpan, turnId, startedAt, turnOverrides };
 			let iterations = 0;
 
 			for (let iteration = 0; iteration < turnMaxIterations; iteration++) {
-				// Check for abort before each iteration
 				if (options?.signal?.aborted) {
-					yield { type: "error", errorType: "aborted", message: "Aborted", retryability: "no" };
-					endAskSpanWithError(askSpan, "aborted", "Aborted");
+					yield* this.#terminateTurn(ctx, iterations, totalUsage, totalToolCalls, {
+						errorType: "aborted",
+						message: "Aborted",
+						retryability: "no",
+					});
 					askSpanEnded = true;
-					yield {
-						type: "turn_end",
-						turnId,
-						metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
-						usage: this.#buildTurnUsage(totalUsage),
-					};
 					return;
 				}
 
@@ -426,117 +456,72 @@ export class Session {
 					turnModel.contextWindow,
 				);
 
-				// Yield all events from this iteration's LLM call
-				let hadError = false;
+				let streamErrorEvent: TurnError | undefined;
 				for await (const event of events) {
 					if (event.type === "error") {
-						hadError = true;
-						endGenerationSpanWithError(genSpan, event.errorType, event.message);
-						yield event;
-						endAskSpanWithError(askSpan, event.errorType, event.message);
-						askSpanEnded = true;
-						yield {
-							type: "turn_end",
-							turnId,
-							metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
-							usage: this.#buildTurnUsage(totalUsage),
-						};
-						return;
+						streamErrorEvent = event;
+						break;
 					}
 					yield event;
 				}
 
-				if (hadError) return;
-
-				// Get the final response message
-				const response = await getResponse();
-				this.#context.messages.push(response);
-
-				// Accumulate usage
-				if (response.usage) {
-					totalUsage.inputTokens += response.usage.input ?? 0;
-					totalUsage.outputTokens += response.usage.output ?? 0;
-					totalUsage.cacheReadTokens += response.usage.cacheRead ?? 0;
-					totalUsage.cacheWriteTokens += response.usage.cacheWrite ?? 0;
-				}
-
-				// Check if we have tool calls
-				const responseToolCalls = response.content.filter(
-					(b): b is { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> } =>
-						b.type === "toolCall",
-				);
-
-				if (responseToolCalls.length === 0) {
-					// Final text response
-					const textBlocks = response.content.filter((b) => b.type === "text");
-					const responseText = textBlocks.map((b) => (b as { type: "text"; text: string }).text).join("\n");
-
-					if (!responseText.trim()) {
-						const emptyResponseMessage = "Model returned an empty response";
-						endGenerationSpanWithError(genSpan, "empty_response", emptyResponseMessage);
-						yield {
-							type: "error",
-							errorType: "empty_response",
-							message: emptyResponseMessage,
-							retryability: "yes",
-						};
-						endAskSpanWithError(askSpan, "empty_response", emptyResponseMessage);
-						askSpanEnded = true;
-						yield {
-							type: "turn_end",
-							turnId,
-							metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
-							usage: this.#buildTurnUsage(totalUsage),
-						};
-						return;
-					}
-					endGenerationSpan(genSpan, {
-						output: response.content,
-						inputTokens: response.usage?.input ?? 0,
-						outputTokens: response.usage?.output ?? 0,
-						cacheReadTokens: response.usage?.cacheRead ?? 0,
-						cacheCreationTokens: response.usage?.cacheWrite ?? 0,
-						stopReason: response.stopReason,
+				if (streamErrorEvent) {
+					endGenerationSpanWithError(genSpan, streamErrorEvent.errorType, streamErrorEvent.message);
+					yield* this.#terminateTurn(ctx, iterations, totalUsage, totalToolCalls, {
+						errorType: streamErrorEvent.errorType,
+						message: streamErrorEvent.message,
+						retryability: streamErrorEvent.retryability,
+						existingEvent: streamErrorEvent,
 					});
-					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
 					askSpanEnded = true;
-					yield {
-						type: "turn_end",
-						turnId,
-						metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
-						usage: this.#buildTurnUsage(totalUsage),
-					};
 					return;
 				}
 
-				// Execute tool calls and yield results
-				totalToolCalls += responseToolCalls.length;
-				endGenerationSpan(genSpan, {
+				const response = await getResponse();
+				this.#context.messages.push(response);
+				accumulateUsage(totalUsage, response.usage);
+
+				const genSpanMetrics = {
 					output: response.content,
 					inputTokens: response.usage?.input ?? 0,
 					outputTokens: response.usage?.output ?? 0,
 					cacheReadTokens: response.usage?.cacheRead ?? 0,
 					cacheCreationTokens: response.usage?.cacheWrite ?? 0,
 					stopReason: response.stopReason,
-				});
-				yield* this.#executeToolCalls(responseToolCalls, genSpan);
+				};
+
+				const classification = classifyResponse(response);
+
+				if (classification.kind === "empty") {
+					const message = "Model returned an empty response";
+					endGenerationSpanWithError(genSpan, "empty_response", message);
+					yield* this.#terminateTurn(ctx, iterations, totalUsage, totalToolCalls, {
+						errorType: "empty_response",
+						message,
+						retryability: "yes",
+					});
+					askSpanEnded = true;
+					return;
+				}
+
+				if (classification.kind === "final") {
+					endGenerationSpan(genSpan, genSpanMetrics);
+					yield* this.#terminateTurn(ctx, iterations, totalUsage, totalToolCalls);
+					askSpanEnded = true;
+					return;
+				}
+
+				totalToolCalls += classification.toolCalls.length;
+				endGenerationSpan(genSpan, genSpanMetrics);
+				yield* this.#executeToolCalls(classification.toolCalls, genSpan);
 			}
 
-			// Max iterations reached
-			yield {
-				type: "error",
+			yield* this.#terminateTurn(ctx, iterations, totalUsage, totalToolCalls, {
 				errorType: "max_iterations",
 				message: "Max iterations reached without a final answer.",
 				retryability: "no",
-			};
-			endAskSpanWithError(askSpan, "max_iterations", "Max iterations reached without a final answer.");
+			});
 			askSpanEnded = true;
-			yield {
-				type: "turn_end",
-				turnId,
-				metadata: this.#buildTurnMetadata(iterations, startedAt, turnOverrides),
-				usage: this.#buildTurnUsage(totalUsage),
-			};
 		} catch (error) {
 			if (askSpan && !askSpanEnded) {
 				endAskSpanWithError(askSpan, "internal_error", error);
@@ -553,6 +538,84 @@ export class Session {
 				endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: 0, usage: totalUsage });
 			}
 			onDone();
+		}
+	}
+
+	/**
+	 * Emit the terminal `error` (if any) and `turn_end` events for a turn and
+	 * close the ask span consistently. Centralizing this is the sole reason the
+	 * four end-of-turn code paths in #doAsk collapse into single call sites.
+	 */
+	*#terminateTurn(
+		ctx: TurnContext,
+		iterations: number,
+		usage: UsageAccumulator,
+		totalToolCalls: number,
+		failure?: TurnFailure,
+	): Generator<StreamEvent> {
+		if (failure) {
+			if (failure.existingEvent) {
+				yield failure.existingEvent;
+			} else {
+				yield {
+					type: "error",
+					errorType: failure.errorType,
+					message: failure.message,
+					retryability: failure.retryability,
+				};
+			}
+			endAskSpanWithError(ctx.askSpan, failure.errorType, failure.message);
+		} else {
+			endAskSpan(ctx.askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage });
+		}
+		yield {
+			type: "turn_end",
+			turnId: ctx.turnId,
+			metadata: this.#buildTurnMetadata(iterations, ctx.startedAt, ctx.turnOverrides),
+			usage: this.#buildTurnUsage(usage),
+		};
+	}
+
+	/**
+	 * Run the compaction step for a new turn and emit the `compaction` event
+	 * when a compaction actually happens. On failure, swallows the error (a
+	 * compaction failure must not abort the turn) but records it on the span.
+	 */
+	async *#runCompaction(
+		askSpan: import("@opentelemetry/api").Span,
+		prompt: string,
+		turnModel: Model<Api>,
+	): AsyncGenerator<StreamEvent> {
+		const newQuestionMessage: Message = { role: "user", content: prompt, timestamp: Date.now() };
+		const messagesWithQuestion = [...this.#context.messages, newQuestionMessage];
+
+		const compactionSpan = startCompactionSpan(askSpan);
+		try {
+			const result = await maybeCompact(turnModel, messagesWithQuestion, this.#compactionSummary);
+			if (result.wasCompacted) {
+				this.#context.messages = result.messages;
+				this.#compactionSummary = result.summary;
+				endCompactionSpan(compactionSpan, {
+					wasCompacted: true,
+					tokensBefore: result.tokensBefore,
+					tokensAfter: result.tokensAfter,
+				});
+				yield {
+					type: "compaction",
+					summary: result.summary ?? "",
+					firstKeptOrdinal: result.firstKeptOrdinal,
+					tokensBefore: result.tokensBefore,
+					tokensAfter: result.tokensAfter,
+					readFiles: result.readFiles,
+					modifiedFiles: result.modifiedFiles,
+				};
+			} else {
+				this.#context.messages.push(newQuestionMessage);
+				endCompactionSpan(compactionSpan, { wasCompacted: false });
+			}
+		} catch (compactionError) {
+			this.#context.messages.push(newQuestionMessage);
+			endCompactionSpanWithError(compactionSpan, compactionError);
 		}
 	}
 

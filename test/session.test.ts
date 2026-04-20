@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { Api, Model } from "@mariozechner/pi-ai";
+import type { Api, AssistantMessage, Model } from "@mariozechner/pi-ai";
 import type { Repo } from "../src/forge";
 import { nullLogger } from "../src/logger";
-import { Session, type SessionConfig } from "../src/session";
+import { classifyResponse, Session, type SessionConfig } from "../src/session";
 import { createCapturingLogger } from "./helpers/capturing-logger";
 
 // Mock repo for testing
@@ -764,5 +764,70 @@ describe("Session", () => {
 			const session = new Session(createMockRepo(), createMockConfig({ initialTurns: [] }));
 			expect(session.getTurns()).toEqual([]);
 		});
+	});
+});
+
+describe("classifyResponse", () => {
+	function makeResponse(content: AssistantMessage["content"]): AssistantMessage {
+		// classifyResponse only reads `content`; other fields are filled for shape completeness.
+		return {
+			role: "assistant",
+			content,
+			timestamp: Date.now(),
+			api: "test",
+			provider: "test",
+			model: "test",
+			stopReason: "end_turn",
+		} as unknown as AssistantMessage;
+	}
+
+	test("tool calls take precedence, even when text is also present", () => {
+		const r = makeResponse([
+			{ type: "text", text: "Looking up..." },
+			{ type: "toolCall", id: "tc1", name: "rg", arguments: { pattern: "x" } },
+		]);
+		const c = classifyResponse(r);
+		expect(c.kind).toBe("tool_calls");
+		if (c.kind === "tool_calls") {
+			expect(c.toolCalls).toHaveLength(1);
+			expect(c.toolCalls[0]?.name).toBe("rg");
+		}
+	});
+
+	test("multiple tool calls all surface in order", () => {
+		const r = makeResponse([
+			{ type: "toolCall", id: "a", name: "fd", arguments: {} },
+			{ type: "toolCall", id: "b", name: "rg", arguments: {} },
+		]);
+		const c = classifyResponse(r);
+		expect(c.kind).toBe("tool_calls");
+		if (c.kind === "tool_calls") {
+			expect(c.toolCalls.map((t) => t.id)).toEqual(["a", "b"]);
+		}
+	});
+
+	test("text-only response with content classifies as final", () => {
+		const r = makeResponse([{ type: "text", text: "The answer is 42." }]);
+		const c = classifyResponse(r);
+		expect(c).toEqual({ kind: "final", text: "The answer is 42." });
+	});
+
+	test("multiple text blocks are joined with newlines", () => {
+		const r = makeResponse([
+			{ type: "text", text: "Line one" },
+			{ type: "text", text: "Line two" },
+		]);
+		const c = classifyResponse(r);
+		expect(c).toEqual({ kind: "final", text: "Line one\nLine two" });
+	});
+
+	test("no content at all classifies as empty", () => {
+		const r = makeResponse([]);
+		expect(classifyResponse(r)).toEqual({ kind: "empty" });
+	});
+
+	test("whitespace-only text classifies as empty", () => {
+		const r = makeResponse([{ type: "text", text: "   \n\t  " }]);
+		expect(classifyResponse(r)).toEqual({ kind: "empty" });
 	});
 });
