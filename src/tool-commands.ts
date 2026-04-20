@@ -24,18 +24,6 @@ import { TypeCompiler } from "@sinclair/typebox/compiler";
 
 const RG_MAX_MATCHES_PER_FILE = 50;
 
-export const ALLOWED_GIT_SUBCOMMANDS = [
-	"log",
-	"show",
-	"blame",
-	"diff",
-	"shortlog",
-	"describe",
-	"rev-parse",
-	"ls-tree",
-	"cat-file",
-];
-
 // =============================================================================
 // Schemas (LLM-facing parameter definitions)
 // =============================================================================
@@ -171,10 +159,22 @@ const validators: Record<ToolName, ReturnType<typeof TypeCompiler.Compile<TSchem
 };
 
 /** Format the first TypeBox error as an actionable, human-readable message. */
-function formatValidationError(toolName: string, firstError: { path: string; message: string } | undefined): string {
+function formatValidationError(
+	toolName: string,
+	firstError: { path: string; value: unknown; message: string; schema?: TSchema } | undefined,
+): string {
 	if (!firstError) return `${toolName}: invalid arguments`;
 	// path looks like "/pattern" or "/args/0"; strip the leading slash for readability.
 	const field = firstError.path.replace(/^\//, "") || "(root)";
+
+	// When a union-of-literals fails, list the allowed values instead of the
+	// opaque "Expected union value" message.
+	const anyOf = firstError.schema?.anyOf as { const?: string }[] | undefined;
+	const allowed = anyOf?.map((s) => s.const).filter(Boolean);
+	if (allowed?.length) {
+		return `${toolName}: '${firstError.value}' not allowed for '${field}'. Allowed: ${allowed.join(", ")}`;
+	}
+
 	return `${toolName}: ${firstError.message} at '${field}'`;
 }
 
@@ -301,13 +301,6 @@ function buildRead(args: ReadArgs, cwd: string): ToolCommand {
 
 function buildGit(args: GitArgs): ToolCommand {
 	const gitArgs = args.args ?? [];
-
-	if (!ALLOWED_GIT_SUBCOMMANDS.includes(args.command)) {
-		return {
-			ok: false,
-			error: `git subcommand not allowed: ${args.command}. Allowed: ${ALLOWED_GIT_SUBCOMMANDS.join(", ")}`,
-		};
-	}
 
 	return { ok: true, cmd: ["git", args.command, ...gitArgs] };
 }
