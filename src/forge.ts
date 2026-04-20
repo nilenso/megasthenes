@@ -1,117 +1,20 @@
-import { access, mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { Span } from "@opentelemetry/api";
 import { MegasthenesError } from "./errors";
+import {
+	type CachePhaseResult,
+	ensureCachedRepo,
+	ensureWorktree,
+	removeWorktree,
+	resolveCommitish,
+	withCloneLock,
+} from "./forge/git";
+import { type Forge, type ForgeName, forges, inferForge, parseRepoPath } from "./forge/providers";
 import { endChildSpan, withChildSpan } from "./tracing";
 
-/**
- * Lock map to prevent race conditions when cloning the same repo in parallel.
- *
- * When multiple concurrent calls try to clone the same repository, this lock ensures
- * only one clone happens while others wait. Without this, concurrent clones to the
- * same path would corrupt the repository.
- *
- * Note: This lock is process-local. If multiple Node.js processes run simultaneously,
- * they will not share this lock and may still race. For multi-process scenarios,
- * consider using file-based locking or ensuring only one process clones at a time.
- */
-const cloneLocks = new Map<string, Promise<void>>();
-
-async function withCloneLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-	while (cloneLocks.has(key)) {
-		await cloneLocks.get(key);
-	}
-
-	let resolveLock: (() => void) | undefined;
-	const lockPromise = new Promise<void>((r) => {
-		resolveLock = r;
-	});
-	cloneLocks.set(key, lockPromise);
-
-	try {
-		return await fn();
-	} finally {
-		cloneLocks.delete(key);
-		resolveLock?.();
-	}
-}
-
-async function exists(path: string): Promise<boolean> {
-	try {
-		await access(path);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-async function commitishExistsLocally(repoPath: string, commitish: string): Promise<boolean> {
-	const proc = Bun.spawn(["git", "cat-file", "-t", commitish], {
-		cwd: repoPath,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const output = (await new Response(proc.stdout).text()).trim();
-	const exitCode = await proc.exited;
-	return exitCode === 0 && (output === "commit" || output === "tag");
-}
-
-/** Supported git forge types */
-export type ForgeName = "github" | "gitlab";
-
-/** Interface for git forge implementations */
-export interface Forge {
-	/** The forge identifier */
-	name: ForgeName;
-	/** Build an authenticated clone URL */
-	buildCloneUrl(repoUrl: string, token?: string): string;
-}
-
-const GitHubForge: Forge = {
-	name: "github",
-	buildCloneUrl(repoUrl: string, token?: string): string {
-		if (!token) return repoUrl;
-		const url = new URL(repoUrl);
-		url.username = token;
-		return url.toString();
-	},
-};
-
-const GitLabForge: Forge = {
-	name: "gitlab",
-	buildCloneUrl(repoUrl: string, token?: string): string {
-		if (!token) return repoUrl;
-		const url = new URL(repoUrl);
-		url.username = "oauth2";
-		url.password = token;
-		return url.toString();
-	},
-};
-
-const forges: Record<ForgeName, Forge> = {
-	github: GitHubForge,
-	gitlab: GitLabForge,
-};
-
-export function inferForge(repoUrl: string): ForgeName | null {
-	const url = new URL(repoUrl);
-	if (url.hostname === "github.com") return "github";
-	if (url.hostname === "gitlab.com") return "gitlab";
-	return null;
-}
-
-function parseRepoPath(repoUrl: string): { username: string; reponame: string } {
-	const url = new URL(repoUrl);
-	const parts = url.pathname
-		.replace(/^\//, "")
-		.replace(/\.git$/, "")
-		.split("/");
-	if (parts.length < 2 || !parts[0] || !parts[1]) {
-		throw new MegasthenesError("invalid_config", `Invalid repo URL: ${repoUrl}`, { retryability: "no" });
-	}
-	return { username: parts[0], reponame: parts[1] };
-}
+export type { Forge, ForgeName } from "./forge/providers";
+export { inferForge } from "./forge/providers";
 
 /** Options for connecting to a repository */
 export interface ConnectOptions {
@@ -137,12 +40,6 @@ export interface Repo {
 	cachePath: string;
 }
 
-// Stderr substrings that indicate there was nothing to remove: git already
-// doesn't track the worktree, or the path is gone. Matching any of these
-// means the desired end-state is already achieved, so cleanup is treated as
-// successful (idempotent remove) rather than failed.
-const CLEANUP_ALREADY_DONE_MARKERS = ["is not a working tree", "No such file or directory"] as const;
-
 /**
  * Outcome of `cleanupRepo`. On failure, `details` is an opaque bag the caller
  * can forward to a logger without inspecting — keeping callers free of
@@ -162,109 +59,12 @@ export type CleanupResult = { ok: true } | { ok: false; details?: Record<string,
  */
 export async function cleanupRepo(repo: Repo): Promise<CleanupResult> {
 	try {
-		const proc = Bun.spawn(["git", "worktree", "remove", "--force", repo.localPath], {
-			cwd: repo.cachePath,
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
-		if (exitCode === 0) return { ok: true };
-		if (CLEANUP_ALREADY_DONE_MARKERS.some((marker) => stderr.includes(marker))) {
-			return { ok: true };
-		}
-		return { ok: false, details: { path: repo.localPath, exitCode, stderr: stderr.trim() } };
+		const result = await removeWorktree(repo.cachePath, repo.localPath);
+		if (result.ok) return { ok: true };
+		return { ok: false, details: { path: repo.localPath, exitCode: result.exitCode, stderr: result.stderr } };
 	} catch (error) {
 		return { ok: false, details: { path: repo.localPath, error } };
 	}
-}
-
-type CacheOperation = "fetch" | "reuse_cache" | "clone";
-
-interface CachePhaseResult {
-	operation: CacheOperation;
-	cacheExisted: boolean;
-}
-
-async function ensureCachedRepo(
-	cachePath: string,
-	commitish: string,
-	buildCloneUrl: () => string,
-): Promise<CachePhaseResult> {
-	const headFile = join(cachePath, "HEAD");
-	const cacheExists = await exists(headFile);
-
-	if (cacheExists) {
-		const hasCommitish = await commitishExistsLocally(cachePath, commitish);
-		if (hasCommitish) {
-			return { operation: "reuse_cache", cacheExisted: true };
-		}
-		const proc = Bun.spawn(["git", "fetch", "origin", "--tags"], {
-			cwd: cachePath,
-			stdout: "inherit",
-			stderr: "inherit",
-		});
-		const fetchExit = await proc.exited;
-		if (fetchExit !== 0) {
-			throw new MegasthenesError("fetch_failed", `git fetch failed with exit code ${fetchExit}`, {
-				retryability: "yes",
-			});
-		}
-		return { operation: "fetch", cacheExisted: true };
-	}
-
-	// Clean up incomplete clone if directory exists but HEAD doesn't
-	if (await exists(cachePath)) {
-		await rm(cachePath, { recursive: true, force: true });
-	}
-	await mkdir(cachePath, { recursive: true });
-	const proc = Bun.spawn(["git", "clone", "--bare", "--filter=blob:none", buildCloneUrl(), cachePath], {
-		stdout: "inherit",
-		stderr: "inherit",
-	});
-	const exitCode = await proc.exited;
-	if (exitCode !== 0) {
-		throw new MegasthenesError("clone_failed", `git clone failed with exit code ${exitCode}`, {
-			retryability: "yes",
-		});
-	}
-	return { operation: "clone", cacheExisted: false };
-}
-
-async function resolveCommitish(cachePath: string, commitish: string): Promise<string> {
-	const proc = Bun.spawn(["git", "rev-parse", commitish], {
-		cwd: cachePath,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const resolved = (await new Response(proc.stdout).text()).trim();
-	const exitCode = await proc.exited;
-	if (exitCode !== 0) {
-		throw new MegasthenesError("invalid_commitish", `Failed to resolve commitish: ${commitish}`, {
-			retryability: "no",
-		});
-	}
-	return resolved;
-}
-
-async function ensureWorktree(cachePath: string, sha: string, worktreePath: string): Promise<{ reused: boolean }> {
-	if (await exists(worktreePath)) {
-		return { reused: true };
-	}
-	await mkdir(dirname(worktreePath), { recursive: true });
-	const proc = Bun.spawn(["git", "worktree", "add", worktreePath, sha], {
-		cwd: cachePath,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const exitCode = await proc.exited;
-	// If `git worktree add` failed, it may be because a concurrent call won the race.
-	// Re-check the path: if still missing, it's a real failure.
-	if (exitCode !== 0 && !(await exists(worktreePath))) {
-		throw new MegasthenesError("clone_failed", `git worktree add failed with exit code ${exitCode}`, {
-			retryability: "yes",
-		});
-	}
-	return { reused: exitCode !== 0 };
 }
 
 function recordCachePhaseOutcome(span: Span | undefined, cachePath: string, result: CachePhaseResult): void {
