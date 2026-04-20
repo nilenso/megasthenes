@@ -535,19 +535,32 @@ describe("sandbox git tool", () => {
 
 		const output = await client.executeTool(cloneResult.slug, cloneResult.sha, "git", {
 			command: "show",
-			args: ["--stat", "-1"],
+			args: ["--no-patch", "-1"],
 		});
 		expect(output).toContain("Author:");
 	});
 
-	test("git blame shows line attribution", async () => {
+	test("git show reports a clear partial clone error when objects are missing", async () => {
+		if (!(await isSandboxRunning())) return;
+
+		const output = await client.executeTool(cloneResult.slug, cloneResult.sha, "git", {
+			command: "show",
+			args: ["--stat", "-1"],
+		});
+
+		expect(output).toContain("needs objects omitted by partial clone");
+		expect(output).not.toContain("promisor remote");
+	});
+
+	test("git blame reports a clear partial clone error when objects are missing", async () => {
 		if (!(await isSandboxRunning())) return;
 
 		const output = await client.executeTool(cloneResult.slug, cloneResult.sha, "git", {
 			command: "blame",
 			args: ["README"],
 		});
-		expect(output).toContain("Hello");
+		expect(output).toContain("needs objects omitted by partial clone");
+		expect(output).not.toContain("promisor remote");
 	});
 
 	test("git fetch is blocked", async () => {

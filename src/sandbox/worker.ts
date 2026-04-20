@@ -159,6 +159,17 @@ async function runGitIsolated(
 	);
 }
 
+function isMissingPromisorObjectError(stderr: string): boolean {
+	const normalized = stderr.toLowerCase();
+	return (
+		normalized.includes("promisor remote") ||
+		normalized.includes("lazy fetching disabled") ||
+		// git blame emits "cannot read blob object for <path>" when the blob
+		// was excluded by a partial clone's blob filter.
+		normalized.includes("cannot read blob")
+	);
+}
+
 /** Run a tool command with filesystem, PID, and network isolation. */
 async function runToolIsolated(
 	cmd: string[],
@@ -409,12 +420,28 @@ async function handleTool(body: ToolRequest): Promise<Response> {
 	if (name === "git") {
 		const bareRepo = `${repoDir(slug)}/bare`;
 		const cmd = isolatedGitToolCommand(toolCmd.cmd, worktree, bareRepo, REPO_BASE);
-		result = await run(cmd, worktree, undefined, TOOL_TIMEOUT_MS, SECCOMP_FILTER_PATH);
+		result = await run(
+			cmd,
+			worktree,
+			{ ...GIT_ENV, GIT_ATTR_NOSYSTEM: "1", GIT_CONFIG_NOSYSTEM: "1", GIT_NO_LAZY_FETCH: "1" },
+			TOOL_TIMEOUT_MS,
+			SECCOMP_FILTER_PATH,
+		);
 	} else {
 		result = await runToolIsolated(toolCmd.cmd, worktree);
 	}
 
 	if (result.exitCode !== 0) {
+		if (name === "git" && isMissingPromisorObjectError(result.stderr)) {
+			return Response.json(
+				{
+					ok: false,
+					error:
+						"This git command needs objects omitted by partial clone. Try a metadata-only git command, or implement a prefetch step for this command before running it offline.",
+				},
+				{ status: 500 },
+			);
+		}
 		return Response.json(
 			{ ok: false, error: `${name} failed (exit ${result.exitCode}):\n${result.stderr}` },
 			{ status: 500 },

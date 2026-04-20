@@ -9,7 +9,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { openSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { bwrapArgsForGit, bwrapArgsForTool } from "../../../src/sandbox/isolation/index";
@@ -37,26 +37,24 @@ function run(cmd: string[], cwd?: string): { stdout: string; stderr: string; exi
 
 /**
  * Run a command with seccomp filter passed as FD 3.
- * Used for commands that include bwrap --seccomp 3.
+ * Uses Bun.spawn (async) to match production behavior in worker.ts.
  */
-function runWithSeccomp(cmd: string[], cwd?: string): { stdout: string; stderr: string; exitCode: number } {
+async function runWithSeccomp(
+	cmd: string[],
+	cwd?: string,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 	const [command = "", ...args] = cmd;
 	const fd = openSync(SECCOMP_FILTER, "r");
-	try {
-		const result = spawnSync(command, args, {
-			cwd,
-			encoding: "utf-8",
-			timeout: 10_000,
-			stdio: ["pipe", "pipe", "pipe", fd],
-		});
-		return {
-			stdout: result.stdout || "",
-			stderr: result.stderr || "",
-			exitCode: result.status ?? -1,
-		};
-	} finally {
-		closeSync(fd);
-	}
+	const proc = Bun.spawn([command, ...args], {
+		cwd,
+		stdio: ["ignore", "pipe", "pipe", fd],
+	});
+	const [stdout, stderr, exitCode] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
+	return { stdout, stderr, exitCode };
 }
 
 function hasBwrap(): boolean {
@@ -84,6 +82,7 @@ describe("bwrap filesystem isolation", () => {
 			console.log("Skipping bwrap tests: bwrap not installed");
 			return;
 		}
+
 		testDir = await mkdtemp(join(testBase, "isolation-test-"));
 		repoDir = join(testDir, "repo");
 		await mkdir(repoDir, { recursive: true });
@@ -124,7 +123,7 @@ describe("bwrap filesystem isolation", () => {
 		if (!hasBwrap() || !hasSeccompFilter()) return;
 
 		const args = bwrapArgsForTool(repoDir, testDir);
-		const result = runWithSeccomp([...args, "cat", join(repoDir, "test.txt")]);
+		const result = await runWithSeccomp([...args, "cat", join(repoDir, "test.txt")]);
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout.trim()).toBe("test content");
@@ -134,7 +133,7 @@ describe("bwrap filesystem isolation", () => {
 		if (!hasBwrap() || !hasSeccompFilter()) return;
 
 		const args = bwrapArgsForTool(repoDir, testDir);
-		const result = runWithSeccomp([...args, "sh", "-c", `echo "write" > ${repoDir}/write.txt 2>&1`]);
+		const result = await runWithSeccomp([...args, "sh", "-c", `echo "write" > ${repoDir}/write.txt 2>&1`]);
 
 		expect(result.exitCode).not.toBe(0);
 	});
@@ -148,7 +147,7 @@ describe("bwrap filesystem isolation", () => {
 		await writeFile(join(otherDir, "secret.txt"), "secret");
 
 		const args = bwrapArgsForTool(repoDir, testDir);
-		const result = runWithSeccomp([...args, "cat", join(otherDir, "secret.txt")]);
+		const result = await runWithSeccomp([...args, "cat", join(otherDir, "secret.txt")]);
 
 		expect(result.exitCode).not.toBe(0);
 	});
@@ -168,7 +167,7 @@ describe("bwrap PID isolation", () => {
 		// Verify PID namespace is created (process gets PID 1 or low number)
 		// Note: without --proc /proc, /proc still shows host processes,
 		// but the sandbox process itself is in a new namespace
-		const result = runWithSeccomp([...args, "sh", "-c", "echo $$"]);
+		const result = await runWithSeccomp([...args, "sh", "-c", "echo $$"]);
 
 		expect(result.exitCode).toBe(0);
 		// The shell should have a low PID in the new namespace
@@ -189,7 +188,7 @@ describe("bwrap PID isolation", () => {
 
 		// Try to check if this PID exists in the sandbox
 		// In an isolated PID namespace, high host PIDs shouldn't exist
-		const result = runWithSeccomp([...args, "sh", "-c", `kill -0 ${hostPid} 2>&1`]);
+		const result = await runWithSeccomp([...args, "sh", "-c", `kill -0 ${hostPid} 2>&1`]);
 
 		// Should fail - the host PID doesn't exist in the sandbox namespace
 		expect(result.exitCode).not.toBe(0);
@@ -220,7 +219,7 @@ describe("seccomp network blocking", () => {
 		const args = bwrapArgsForTool(testDir, testDir);
 
 		// Try to create an IPv4 socket - should fail with EPERM
-		const result = runWithSeccomp([
+		const result = await runWithSeccomp([
 			...args,
 			"python3",
 			"-c",
@@ -242,7 +241,7 @@ describe("seccomp network blocking", () => {
 		const testDir = await mkdtemp(join("/var/tmp", "seccomp-test-"));
 		const args = bwrapArgsForTool(testDir, testDir);
 
-		const result = runWithSeccomp([
+		const result = await runWithSeccomp([
 			...args,
 			"python3",
 			"-c",
@@ -264,7 +263,7 @@ describe("seccomp network blocking", () => {
 		const testDir = await mkdtemp(join("/var/tmp", "seccomp-test-"));
 		const args = bwrapArgsForTool(testDir, testDir);
 
-		const result = runWithSeccomp([
+		const result = await runWithSeccomp([
 			...args,
 			"python3",
 			"-c",
@@ -286,7 +285,7 @@ describe("seccomp network blocking", () => {
 		const testDir = await mkdtemp(join("/var/tmp", "seccomp-test-"));
 		const args = bwrapArgsForTool(testDir, testDir);
 
-		const result = runWithSeccomp([...args, "echo", "hello world"]);
+		const result = await runWithSeccomp([...args, "echo", "hello world"]);
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout.trim()).toBe("hello world");
@@ -316,7 +315,7 @@ describe("combined bwrap + seccomp isolation", () => {
 		await writeFile(join(testDir, "data.txt"), "isolated content");
 
 		const args = bwrapArgsForTool(testDir, testDir);
-		const result = runWithSeccomp([...args, "cat", join(testDir, "data.txt")]);
+		const result = await runWithSeccomp([...args, "cat", join(testDir, "data.txt")]);
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout.trim()).toBe("isolated content");
@@ -334,7 +333,7 @@ describe("combined bwrap + seccomp isolation", () => {
 		const args = bwrapArgsForTool(testDir, testDir);
 
 		// Use bash /dev/tcp which requires socket creation
-		const result = runWithSeccomp([...args, "bash", "-c", "echo > /dev/tcp/1.1.1.1/53"]);
+		const result = await runWithSeccomp([...args, "bash", "-c", "echo > /dev/tcp/1.1.1.1/53"]);
 
 		expect(result.exitCode).not.toBe(0);
 
@@ -351,7 +350,7 @@ describe("combined bwrap + seccomp isolation", () => {
 		await writeFile(join(testDir, "existing.txt"), "original");
 
 		const args = bwrapArgsForTool(testDir, testDir);
-		const result = runWithSeccomp([...args, "sh", "-c", `echo "modified" > ${testDir}/existing.txt`]);
+		const result = await runWithSeccomp([...args, "sh", "-c", `echo "modified" > ${testDir}/existing.txt`]);
 
 		expect(result.exitCode).not.toBe(0);
 
