@@ -176,6 +176,12 @@ export class Client {
 			);
 
 			if (this.#sandboxClient) {
+				// Verify sandbox is reachable before attempting clone
+				const healthy = await this.#sandboxClient.health();
+				if (!healthy) {
+					throw new Error(`Sandbox is not reachable at ${this.config.sandbox?.baseUrl}`);
+				}
+
 				const cloneResult = await this.#sandboxClient.clone(
 					repoConfig.url,
 					repoConfig.commitish,
