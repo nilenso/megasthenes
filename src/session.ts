@@ -498,7 +498,7 @@ export class Session {
 						outputTokens: response.usage?.output ?? 0,
 						cacheReadTokens: response.usage?.cacheRead ?? 0,
 						cacheCreationTokens: response.usage?.cacheWrite ?? 0,
-						stopReason: (response as unknown as { stopReason?: string }).stopReason,
+						stopReason: response.stopReason,
 					});
 					endAskSpan(askSpan, { toolCallCount: totalToolCalls, totalIterations: iterations, usage: totalUsage });
 					askSpanEnded = true;
@@ -519,7 +519,7 @@ export class Session {
 					outputTokens: response.usage?.output ?? 0,
 					cacheReadTokens: response.usage?.cacheRead ?? 0,
 					cacheCreationTokens: response.usage?.cacheWrite ?? 0,
-					stopReason: (response as unknown as { stopReason?: string }).stopReason,
+					stopReason: response.stopReason,
 				});
 				yield* this.#executeToolCalls(responseToolCalls, genSpan);
 			}
