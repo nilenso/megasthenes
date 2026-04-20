@@ -206,13 +206,13 @@ describe("TurnResultBuilder", () => {
 	});
 
 	describe("iteration tracking", () => {
-		test("addIterationStart() adds an iteration_start step", () => {
-			const builder = new TurnResultBuilder();
-			builder.addIterationStart(0);
-			builder.process({ type: "text", text: "response" });
-			builder.addIterationStart(1);
+		test("iteration_start event adds an iteration_start step", () => {
+			const result = buildFromEvents([
+				{ type: "iteration_start", index: 0 },
+				{ type: "text", text: "response" },
+				{ type: "iteration_start", index: 1 },
+			]);
 
-			const result = builder.build();
 			const iterSteps = result.steps.filter((s) => s.type === "iteration_start");
 			expect(iterSteps).toHaveLength(2);
 			expect(iterSteps[0]).toEqual({ type: "iteration_start", index: 0 });
@@ -275,16 +275,14 @@ describe("TurnResultBuilder", () => {
 			});
 		});
 
-		test("setError() sets turn-level error", () => {
-			const builder = new TurnResultBuilder();
-			builder.setError("max_iterations", "Max iterations reached", "no");
+		test("library-source error event classifies source correctly", () => {
+			const result = buildFromEvents([
+				{ type: "error", errorType: "max_iterations", message: "Max iterations reached", retryability: "no" },
+			]);
 
-			const result = builder.build();
-			expect(result.error).toEqual({
-				errorType: "max_iterations",
-				message: "Max iterations reached",
-				retryability: "no",
-			});
+			expect(result.error?.errorType).toBe("max_iterations");
+			expect(result.error?.message).toBe("Max iterations reached");
+			expect(result.error?.retryability).toBe("no");
 
 			const errorSteps = result.steps.filter((s) => s.type === "error");
 			expect(errorSteps).toHaveLength(1);
@@ -308,12 +306,23 @@ describe("TurnResultBuilder", () => {
 	});
 
 	describe("usage accumulation", () => {
-		test("addUsage() accumulates token counts", () => {
-			const builder = new TurnResultBuilder();
-			builder.addUsage({ inputTokens: 100, outputTokens: 50, totalTokens: 150 });
-			builder.addUsage({ inputTokens: 200, outputTokens: 30, totalTokens: 230, cacheReadTokens: 10 });
+		test("turn_end event records the accumulated token usage", () => {
+			const result = buildFromEvents([
+				{ type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 },
+				{
+					type: "turn_end",
+					turnId: "t-1",
+					metadata: makeMetadata(),
+					usage: {
+						inputTokens: 300,
+						outputTokens: 80,
+						totalTokens: 380,
+						cacheReadTokens: 10,
+						cacheWriteTokens: 0,
+					},
+				},
+			]);
 
-			const result = builder.build();
 			expect(result.usage.inputTokens).toBe(300);
 			expect(result.usage.outputTokens).toBe(80);
 			expect(result.usage.totalTokens).toBe(380);
