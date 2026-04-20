@@ -294,22 +294,22 @@ describe("Session", () => {
 		});
 
 		test("concurrent ask() calls are serialized", async () => {
-			const order: string[] = [];
-			let streamCalls = 0;
-
+			// If two asks ran in parallel the natural await points in doAsk
+			// (compaction, iteration_start, ...) would let the second reach the
+			// stream fn before the first released.
+			let concurrency = 0;
+			let maxConcurrency = 0;
 			const customStream = (() => {
-				streamCalls++;
-				const n = streamCalls;
+				concurrency++;
+				maxConcurrency = Math.max(maxConcurrency, concurrency);
 				return {
 					[Symbol.asyncIterator]: async function* () {
-						order.push(`start-${n}`);
-						await Bun.sleep(30);
-						order.push(`end-${n}`);
-						yield { type: "text_delta", delta: `r${n}` };
+						yield { type: "text_delta", delta: "x" };
+						concurrency--;
 					},
 					result: async () => ({
 						role: "assistant" as const,
-						content: [{ type: "text" as const, text: `r${n}` }],
+						content: [{ type: "text" as const, text: "x" }],
 						usage: { input: 10, output: 5, totalTokens: 15 },
 						timestamp: Date.now(),
 						api: "test",
@@ -321,12 +321,9 @@ describe("Session", () => {
 			}) as unknown as SessionConfig["stream"];
 
 			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
+			await Promise.all([session.ask("q1").result(), session.ask("q2").result()]);
 
-			const s1 = session.ask("q1");
-			const s2 = session.ask("q2");
-			await Promise.all([s1.result(), s2.result()]);
-
-			expect(order).toEqual(["start-1", "end-1", "start-2", "end-2"]);
+			expect(maxConcurrency).toBe(1);
 		});
 	});
 

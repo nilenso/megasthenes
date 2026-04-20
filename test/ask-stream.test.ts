@@ -160,12 +160,12 @@ describe("AskStream", () => {
 			},
 		];
 
-		// Use a slow producer so iteration is still in progress when .result() is called
+		// No explicit sync: async generator bodies execute synchronously up to the
+		// first yield, so by the time the iterator IIFE is created, the iterator
+		// has already set #consuming=true. .result() is guaranteed to observe
+		// mid-iteration and take the wait-for-done path.
 		const stream = new AskStreamImpl(async function* () {
-			for (const event of events) {
-				await Bun.sleep(10);
-				yield event;
-			}
+			yield* events;
 		});
 
 		const collected: StreamEvent[] = [];
@@ -174,15 +174,11 @@ describe("AskStream", () => {
 				collected.push(event);
 			}
 		})();
-
-		// Call .result() while iteration is still in progress
 		const resultPromise = stream.result();
 
 		const [, result] = await Promise.all([iterPromise, resultPromise]);
 
-		// Iterator should have seen all events
 		expect(collected).toEqual(events);
-		// .result() should have the same data, built from the same builder
 		expect(result.id).toBe("t-1");
 		expect(result.steps[0]).toEqual({ type: "text", text: "A", role: "assistant" });
 	});
