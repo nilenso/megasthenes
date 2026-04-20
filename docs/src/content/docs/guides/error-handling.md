@@ -55,7 +55,7 @@ for await (const event of stream) {
 const result = await stream.result();
 if (result.error) {
   console.log(`Turn ended with: ${result.error.errorType}`);
-  console.log(`Retryable: ${result.error.isRetryable}`);
+  console.log(`Retryable: ${result.error.retryability}`);
 }
 ```
 
@@ -77,7 +77,7 @@ try {
 } catch (err) {
   if (err instanceof MegasthenesError) {
     console.error(`[${err.errorType}] ${err.message}`);
-    if (err.isRetryable) {
+    if (err.retryability === "yes") {
       // Safe to retry
     }
   }
@@ -86,20 +86,22 @@ try {
 
 ### Retryability
 
-The `isRetryable` field indicates whether retrying the same operation might succeed:
+The `retryability` field indicates whether retrying the same operation might succeed. It is a named enum rather than a nullable boolean so the "unknown" case can't collapse into `false`:
 
 | Value | Meaning |
 |---|---|
-| `true` | Transient failure — safe to retry (e.g., network error, rate limit). |
-| `false` | Permanent failure — retrying won't help (e.g., invalid config, nonexistent commit). |
-| `null` | Unknown — the error is opaque (e.g., generic provider error). |
+| `"yes"` | Transient failure — safe to retry (e.g., network error, rate limit). |
+| `"no"` | Permanent failure — retrying won't help (e.g., invalid config, nonexistent commit). |
+| `"unknown"` | The error is opaque (e.g., generic provider error). Callers must decide how to handle it explicitly. |
+
+Switch on `retryability` rather than using it in a truthy check; `if (err.retryability)` is always truthy for all three states.
 
 ### MegasthenesError
 
 ```ts
 class MegasthenesError extends Error {
   readonly errorType: ErrorType;
-  readonly isRetryable: boolean | null;
+  readonly retryability: "yes" | "no" | "unknown";
   readonly details?: unknown;
 }
 ```

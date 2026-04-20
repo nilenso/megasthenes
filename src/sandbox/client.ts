@@ -49,7 +49,9 @@ interface CloneResponseBody {
 function sandboxCloneError(body: CloneResponseBody, fallbackMessage: string): MegasthenesError {
 	const errorType: ErrorType = body.errorType ?? "clone_failed";
 	const message = body.error ? `Sandbox clone failed: ${body.error}` : fallbackMessage;
-	return new MegasthenesError(errorType, message, { isRetryable: errorType !== "invalid_commitish" });
+	return new MegasthenesError(errorType, message, {
+		retryability: errorType === "invalid_commitish" ? "no" : "yes",
+	});
 }
 
 type TriggerOutcome = ({ kind: "ready" } & CloneResult) | { kind: "pending"; slug: string };

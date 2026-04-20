@@ -9,7 +9,7 @@
  */
 
 import { errorSource } from "./error-classification";
-import type { ErrorType, Step, StreamEvent, TokenUsage, TurnMetadata, TurnResult } from "./types";
+import type { ErrorType, Retryability, Step, StreamEvent, TokenUsage, TurnMetadata, TurnResult } from "./types";
 
 /** Mutable state for a tool call being assembled from stream events. */
 interface PendingToolCall {
@@ -30,7 +30,7 @@ export class TurnResultBuilder {
 		cacheReadTokens: 0,
 		cacheWriteTokens: 0,
 	};
-	#error: { errorType: ErrorType; message: string; isRetryable: boolean | null; details?: unknown } | null = null;
+	#error: { errorType: ErrorType; message: string; retryability: Retryability; details?: unknown } | null = null;
 	#startedAt = 0;
 	#endedAt = 0;
 	#metadata: TurnMetadata | null = null;
@@ -136,7 +136,7 @@ export class TurnResultBuilder {
 				this.#error = {
 					errorType: event.errorType,
 					message: event.message,
-					isRetryable: event.isRetryable,
+					retryability: event.retryability,
 					details: event.details,
 				};
 				this.#steps.push({
@@ -144,7 +144,7 @@ export class TurnResultBuilder {
 					errorType: event.errorType,
 					source: errorSource(event.errorType),
 					message: event.message,
-					isRetryable: event.isRetryable,
+					retryability: event.retryability,
 					details: event.details,
 				});
 				break;
@@ -157,14 +157,14 @@ export class TurnResultBuilder {
 	}
 
 	/** Set the turn error (called by the session layer). */
-	setError(errorType: ErrorType, message: string, isRetryable: boolean | null, details?: unknown): void {
-		this.#error = { errorType, message, isRetryable, details };
+	setError(errorType: ErrorType, message: string, retryability: Retryability, details?: unknown): void {
+		this.#error = { errorType, message, retryability, details };
 		this.#steps.push({
 			type: "error",
 			errorType,
 			source: errorSource(errorType),
 			message,
-			isRetryable,
+			retryability,
 			details,
 		});
 	}
