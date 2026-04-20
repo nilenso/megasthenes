@@ -42,6 +42,7 @@
 
 - **Use discriminated unions for results**: Prefer `{ ok: true; value: T } | { ok: false; error: E }` over exceptions for expected failures
 - **Avoid `any` and loose casts**: Create specific types for external/untyped data rather than using `as` assertions. Enforced by Biome (`suspicious/noExplicitAny`).
+- **Preserve literal hints in open string unions**: When a type should suggest known values but still accept arbitrary strings, write `Known | (string & {})` — not `Known | string`. The plain-`string` form collapses the literal arms during union simplification and kills autocomplete; intersecting with `{}` produces a structurally distinct type that blocks the collapse while still accepting every string at runtime. Same trick applies with `(number & {})` for numeric unions.
 - **Export types separately**: Use `type` imports for types that don't need runtime presence
 - **Exhaustiveness over switch discriminants**: Biome 2.4 ships no `useExhaustiveSwitchCases` rule, so we rely on TypeScript: `noFallthroughCasesInSwitch` is on, and authors should add a `default` arm that assigns the discriminant to a `const _: never = x` when they want a compile-time exhaustiveness check.
 

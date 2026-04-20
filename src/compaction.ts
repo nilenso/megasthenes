@@ -7,10 +7,12 @@
  * 2. Generate a summary using an LLM
  * 3. Replace older messages with a summary message
  */
-import { completeSimple, type Message, type Model } from "@mariozechner/pi-ai";
+import { type Api, completeSimple, type Message, type Model } from "@mariozechner/pi-ai";
 import { COMPACTION_SETTINGS, type CompactionSettings } from "./config";
 
 export type { CompactionSettings };
+
+type AnyModel = Model<Api>;
 
 export function getCompactionSettings(): CompactionSettings {
 	return { ...COMPACTION_SETTINGS };
@@ -546,8 +548,7 @@ export interface CompactionResult {
  * Generate a summary of messages using an LLM.
  */
 async function generateSummary(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
+	model: AnyModel,
 	messages: Message[],
 	previousSummary?: string,
 	_signal?: AbortSignal,
@@ -583,12 +584,7 @@ async function generateSummary(
 /**
  * Generate a summary for a turn prefix (when splitting a turn).
  */
-async function generateTurnPrefixSummary(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
-	messages: Message[],
-	_signal?: AbortSignal,
-): Promise<string> {
+async function generateTurnPrefixSummary(model: AnyModel, messages: Message[], _signal?: AbortSignal): Promise<string> {
 	const conversationText = serializeConversation(messages);
 	const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`;
 
@@ -618,8 +614,7 @@ function createSummaryWrapperMessage(summary: string): Message {
 }
 
 async function compactWithTokenIndex(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
+	model: AnyModel,
 	messages: Message[],
 	previousSummary: string | undefined,
 	signal: AbortSignal | undefined,
@@ -694,8 +689,7 @@ async function compactWithTokenIndex(
  * Returns the summary and the messages to keep.
  */
 export async function compact(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
+	model: AnyModel,
 	messages: Message[],
 	previousSummary?: string,
 	signal?: AbortSignal,
@@ -720,8 +714,7 @@ export interface MaybeCompactResult {
  * Returns the (possibly compacted) messages ready for the next ask.
  */
 export async function maybeCompact(
-	// biome-ignore lint/suspicious/noExplicitAny: Model requires generic parameter
-	model: Model<any>,
+	model: AnyModel,
 	messages: Message[],
 	previousSummary?: string,
 	signal?: AbortSignal,
