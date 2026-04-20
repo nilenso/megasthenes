@@ -35,18 +35,25 @@ const CLONE_POLL_INITIAL_INTERVAL_MS = 1_000;
 /** Maximum interval between clone status polls. */
 const CLONE_POLL_MAX_INTERVAL_MS = 5_000;
 
-interface CloneResponseBody {
-	ok: boolean;
-	status?: string;
-	slug?: string;
-	sha?: string;
-	worktree?: string;
-	error?: string;
-	errorType?: ErrorType;
-	elapsedMs?: number;
+/** Body returned by the sandbox worker when it has a protocol status to report. */
+type CloneStatusBody =
+	| { ok: true; status: "cloning"; slug: string; elapsedMs?: number }
+	| { ok: true; status: "ready"; slug: string; sha: string; worktree: string }
+	| { ok: false; status: "failed"; error: string; errorType?: ErrorType };
+
+/** Envelope-level error body (e.g. 400 "url is required"), with no protocol status. */
+interface CloneEnvelopeError {
+	ok: false;
+	error: string;
 }
 
-function sandboxCloneError(body: CloneResponseBody, fallbackMessage: string): MegasthenesError {
+type CloneResponseBody = CloneStatusBody | CloneEnvelopeError;
+
+function isStatusBody(body: CloneResponseBody): body is CloneStatusBody {
+	return "status" in body;
+}
+
+function sandboxCloneError(body: { error?: string; errorType?: ErrorType }, fallbackMessage: string): MegasthenesError {
 	const errorType: ErrorType = body.errorType ?? "clone_failed";
 	const message = body.error ? `Sandbox clone failed: ${body.error}` : fallbackMessage;
 	return new MegasthenesError(errorType, message, {
@@ -58,7 +65,7 @@ type TriggerOutcome = ({ kind: "ready" } & CloneResult) | { kind: "pending"; slu
 
 type PollOutcome =
 	| ({ kind: "ready" } & CloneResult)
-	| { kind: "failed"; body: CloneResponseBody }
+	| { kind: "failed"; error: string; errorType?: ErrorType }
 	| { kind: "timed_out" };
 
 type OnEvent = (name: string, attrs?: Attributes) => void;
@@ -80,16 +87,20 @@ async function triggerClone(
 		signal: AbortSignal.timeout(30_000),
 	});
 	const body = (await res.json()) as CloneResponseBody;
-	if (!body.ok) {
-		throw sandboxCloneError(body, `${fallbackPrefix} (HTTP ${res.status})`);
+	const fallback = `${fallbackPrefix} (HTTP ${res.status})`;
+
+	if (!isStatusBody(body)) {
+		throw sandboxCloneError(body, fallback);
 	}
-	if (body.status === "ready" && body.slug && body.sha && body.worktree) {
-		return { kind: "ready", slug: body.slug, sha: body.sha, worktree: body.worktree };
+
+	switch (body.status) {
+		case "ready":
+			return { kind: "ready", slug: body.slug, sha: body.sha, worktree: body.worktree };
+		case "cloning":
+			return { kind: "pending", slug: body.slug };
+		case "failed":
+			throw sandboxCloneError(body, fallback);
 	}
-	if (!body.slug) {
-		throw new Error("Sandbox clone failed: no slug returned");
-	}
-	return { kind: "pending", slug: body.slug };
 }
 
 interface WaitArgs {
@@ -131,28 +142,33 @@ async function waitForClone(
 		}
 
 		const body = (await statusRes.json()) as CloneResponseBody;
+		if (!isStatusBody(body)) {
+			logger.warn("sandbox:client", `unexpected status response for ${args.slug}: ${body.error}`);
+			continue;
+		}
 
 		if (body.status !== lastStatus) {
 			args.onEvent("sandbox.clone.poll", {
 				elapsed_ms: Date.now() - args.startTime,
-				status: body.status ?? "unknown",
+				status: body.status,
 				previous_status: lastStatus ?? "none",
 			});
 			lastStatus = body.status;
 		}
 
-		if (body.status === "ready" && body.sha && body.worktree) {
-			return { kind: "ready", slug: body.slug ?? args.slug, sha: body.sha, worktree: body.worktree };
+		switch (body.status) {
+			case "ready":
+				return { kind: "ready", slug: body.slug, sha: body.sha, worktree: body.worktree };
+			case "failed":
+				return { kind: "failed", error: body.error, errorType: body.errorType };
+			case "cloning": {
+				const elapsed = body.elapsedMs ?? Date.now() - args.startTime;
+				const elapsedSec = Math.round(elapsed / 1000);
+				logger.debug("sandbox:client", `clone in progress for ${repo.url} (${elapsedSec}s elapsed)`);
+				args.onProgress?.(`Cloning repository… ${elapsedSec}s`);
+				break;
+			}
 		}
-
-		if (body.status === "failed") {
-			return { kind: "failed", body };
-		}
-
-		const elapsed = body.elapsedMs ?? Date.now() - args.startTime;
-		const elapsedSec = Math.round(elapsed / 1000);
-		logger.debug("sandbox:client", `clone in progress for ${repo.url} (${elapsedSec}s elapsed)`);
-		args.onProgress?.(`Cloning repository… ${elapsedSec}s`);
 	}
 
 	return { kind: "timed_out" };
@@ -275,8 +291,8 @@ export class SandboxClient {
 			if (outcome.kind === "failed") {
 				const duration = Date.now() - t0;
 				onEvent("sandbox.clone.failed", { elapsed_ms: duration, slug: trigger.slug });
-				this.logger.error("sandbox:client", new Error(`clone failed after ${duration}ms: ${outcome.body.error}`));
-				throw sandboxCloneError(outcome.body, `Sandbox clone failed after ${duration}ms`);
+				this.logger.error("sandbox:client", new Error(`clone failed after ${duration}ms: ${outcome.error}`));
+				throw sandboxCloneError(outcome, `Sandbox clone failed after ${duration}ms`);
 			}
 
 			onEvent("sandbox.clone.timed_out", { timeout_ms: CLONE_POLL_TIMEOUT_MS, slug: trigger.slug });
