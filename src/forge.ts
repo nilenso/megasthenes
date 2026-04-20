@@ -137,24 +137,44 @@ export interface Repo {
 	cachePath: string;
 }
 
+// Stderr substrings that indicate there was nothing to remove: git already
+// doesn't track the worktree, or the path is gone. Matching any of these
+// means the desired end-state is already achieved, so cleanup is treated as
+// successful (idempotent remove) rather than failed.
+const CLEANUP_ALREADY_DONE_MARKERS = ["is not a working tree", "No such file or directory"] as const;
+
 /**
- * Remove a git worktree associated with a repository.
- * Called automatically by Session.close().
- *
- * @param repo - The repository whose worktree should be removed
- * @returns true if cleanup succeeded, false otherwise
+ * Outcome of `cleanupRepo`. On failure, `details` is an opaque bag the caller
+ * can forward to a logger without inspecting — keeping callers free of
+ * backend-specific knowledge (worktree paths, exit codes, stderr, etc.).
  */
-export async function cleanupWorktree(repo: Repo): Promise<boolean> {
+export type CleanupResult = { ok: true } | { ok: false; details?: Record<string, unknown> };
+
+/**
+ * Release the forge-managed artifacts for a repo. Symmetric with `connectRepo`.
+ *
+ * Repeated cleanups of an already-released repo resolve as `{ ok: true }` so
+ * idempotent calls don't masquerade as failures. Real failures return
+ * `{ ok: false, details }` where `details` captures backend-specific context
+ * (currently the worktree path, git exit code, and stderr) for observability.
+ *
+ * @param repo - The repository to release
+ */
+export async function cleanupRepo(repo: Repo): Promise<CleanupResult> {
 	try {
 		const proc = Bun.spawn(["git", "worktree", "remove", "--force", repo.localPath], {
 			cwd: repo.cachePath,
 			stdout: "pipe",
 			stderr: "pipe",
 		});
-		const exitCode = await proc.exited;
-		return exitCode === 0;
-	} catch {
-		return false;
+		const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+		if (exitCode === 0) return { ok: true };
+		if (CLEANUP_ALREADY_DONE_MARKERS.some((marker) => stderr.includes(marker))) {
+			return { ok: true };
+		}
+		return { ok: false, details: { path: repo.localPath, exitCode, stderr: stderr.trim() } };
+	} catch (error) {
+		return { ok: false, details: { path: repo.localPath, error } };
 	}
 }
 

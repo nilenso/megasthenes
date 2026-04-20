@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { Repo } from "../src/forge";
-import { type Logger, nullLogger } from "../src/logger";
+import { nullLogger } from "../src/logger";
 import { Session, type SessionConfig } from "../src/session";
+import { createCapturingLogger } from "./helpers/capturing-logger";
 
 // Mock repo for testing
 function createMockRepo(): Repo {
@@ -106,33 +107,6 @@ function createMockConfig(overrides?: Partial<SessionConfig>): SessionConfig {
 	};
 }
 
-// Helper to create a logger that captures logs
-function createCapturingLogger(): { logger: Logger; logs: string[]; errors: string[] } {
-	const logs: string[] = [];
-	const errors: string[] = [];
-	return {
-		logs,
-		errors,
-		logger: {
-			error(label: string, error: unknown) {
-				errors.push(`${label}: ${JSON.stringify(error)}`);
-			},
-			warn(label: string, content: string) {
-				logs.push(`WARN ${label}: ${content}`);
-			},
-			log(label: string, content: string) {
-				logs.push(`${label}: ${content}`);
-			},
-			info(label: string, content: string) {
-				logs.push(`${label}: ${content}`);
-			},
-			debug(label: string, content: string) {
-				logs.push(`DEBUG ${label}: ${content}`);
-			},
-		},
-	};
-}
-
 describe("Session", () => {
 	describe("constructor", () => {
 		test("creates session with unique id", () => {
@@ -161,11 +135,17 @@ describe("Session", () => {
 			session.close();
 		});
 
-		test("close() attempts worktree cleanup and logs on failure", async () => {
+		test("close() logs one error with the 'session cleanup failed' label and forwarded details when cleanup fails", async () => {
 			const { logger, errors } = createCapturingLogger();
 			const session = new Session(createMockRepo(), createMockConfig({ logger }));
 			await session.close();
-			expect(errors.some((e) => e.includes("Failed to cleanup worktree"))).toBe(true);
+
+			expect(errors).toHaveLength(1);
+			const [entry] = errors;
+			expect(entry?.label).toBe("session cleanup failed");
+			expect(entry?.payload).toBeDefined();
+			expect(typeof entry?.payload).toBe("object");
+			expect(entry?.payload).not.toBeNull();
 		});
 
 		test("ask throws synchronously after close", async () => {
