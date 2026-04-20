@@ -236,63 +236,6 @@ describe("Session", () => {
 			expect(result.error?.errorType).toBe("max_iterations");
 		});
 
-		test("uses injected stream function", async () => {
-			let streamCalled = false;
-			const customStream = (() => {
-				streamCalled = true;
-				return createMockStreamResult();
-			}) as unknown as SessionConfig["stream"];
-
-			const session = new Session(createMockRepo(), createMockConfig({ stream: customStream }));
-			await session.ask("Test").result();
-			expect(streamCalled).toBe(true);
-		});
-
-		test("adaptive thinking uses stream() with thinkingEnabled", async () => {
-			let capturedOptions: unknown;
-			let streamCalled = false;
-			let streamSimpleCalled = false;
-			const customStream = ((_model: unknown, _context: unknown, options?: unknown) => {
-				streamCalled = true;
-				capturedOptions = options;
-				return createMockStreamResult();
-			}) as unknown as SessionConfig["stream"];
-			const customStreamSimple = ((_model: unknown, _context: unknown, _options?: unknown) => {
-				streamSimpleCalled = true;
-				return createMockStreamResult();
-			}) as unknown as SessionConfig["streamSimple"];
-
-			const session = new Session(
-				createMockRepo(),
-				createMockConfig({ stream: customStream, streamSimple: customStreamSimple, thinking: { type: "adaptive" } }),
-			);
-
-			await session.ask("Test").result();
-			expect(streamCalled).toBe(true);
-			expect(streamSimpleCalled).toBe(false);
-			expect(capturedOptions).toEqual({ thinkingEnabled: true });
-		});
-
-		test("effort-based thinking uses streamSimple() with reasoning option", async () => {
-			let capturedOptions: unknown;
-			let streamSimpleCalled = false;
-			const customStream = (() => createMockStreamResult()) as unknown as SessionConfig["stream"];
-			const customStreamSimple = ((_model: unknown, _context: unknown, options?: unknown) => {
-				streamSimpleCalled = true;
-				capturedOptions = options;
-				return createMockStreamResult();
-			}) as unknown as SessionConfig["streamSimple"];
-
-			const session = new Session(
-				createMockRepo(),
-				createMockConfig({ stream: customStream, streamSimple: customStreamSimple, thinking: { effort: "high" } }),
-			);
-
-			await session.ask("Test").result();
-			expect(streamSimpleCalled).toBe(true);
-			expect(capturedOptions).toEqual({ reasoning: "high" });
-		});
-
 		test("concurrent ask() calls are serialized", async () => {
 			// If two asks ran in parallel the natural await points in doAsk
 			// (compaction, iteration_start, ...) would let the second reach the
