@@ -67,7 +67,7 @@ For the full event reference and consumption patterns (mixing iteration with `.r
 `ask(prompt, options)` accepts an `AskOptions` object for per-turn behavior. Model and thinking overrides are covered in [API Keys and Providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override). Other fields:
 
 - `maxIterations` — override the iteration cap for this turn.
-- `afterTurn` — branch from a specific turn. See [Conversations — Conversation Branching](/megasthenes/guides/session-management/#conversation-branching).
+- `afterTurn` — branch from a specific turn. See [Multi-turn Conversations — Conversation Branching](/megasthenes/guides/session-management/#conversation-branching).
 - `signal` — an `AbortSignal` to cancel the turn mid-stream.
 
 See [`AskOptions`](/megasthenes/api/interfaces/askoptions/) for the full interface.
