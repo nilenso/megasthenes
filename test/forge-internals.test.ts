@@ -72,9 +72,9 @@ describe("forge internals", () => {
 			// Also detach the HEAD-side commit from local refs by resetting the default branch
 			// pointer to v1.0 so commit2 is unreachable locally until we fetch.
 			// For a bare repo, update refs to point at commit1 for every local branch.
-			const branches = (await git(cachePath, "for-each-ref", "--format=%(refname)", "refs/heads/")).split("\n").filter(
-				Boolean,
-			);
+			const branches = (await git(cachePath, "for-each-ref", "--format=%(refname)", "refs/heads/"))
+				.split("\n")
+				.filter(Boolean);
 			for (const ref of branches) {
 				await git(cachePath, "update-ref", ref, testRepo.commits[0] as string);
 			}
