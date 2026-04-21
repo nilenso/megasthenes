@@ -1,5 +1,5 @@
 ---
-title: Streaming
+title: Handling Responses
 description: Consume real-time stream events and turn results from session.ask().
 sidebar:
   order: 3
@@ -120,7 +120,7 @@ const stream = session.ask("Analyze the security of this code", {
 | `model` | `ModelConfig` | Override the model for this turn. |
 | `maxIterations` | `number` | Override max iterations for this turn. |
 | `thinking` | `ThinkingConfig` | Override thinking config for this turn. |
-| `afterTurn` | `string` | Branch from after a specific turn ID. See [Session Management](/megasthenes/guides/session-management/). |
+| `afterTurn` | `string` | Branch from after a specific turn ID. See [Conversations](/megasthenes/guides/session-management/). |
 | `signal` | `AbortSignal` | Cancel the turn mid-stream. |
 
 ### Cancellation
