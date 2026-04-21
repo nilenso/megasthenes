@@ -1,5 +1,5 @@
 ---
-title: API keys and providers
+title: API Keys and Providers
 description: How to pick a provider and model, and override them per session or per ask. Credential resolution is handled by pi-ai.
 sidebar:
   order: 2

@@ -10,7 +10,7 @@ Megasthenes has two layers of configuration:
 - **`ClientConfig`** — shared infrastructure. Passed to `new Client(clientConfig)`. Holds `sandbox` and `logger`.
 - **`SessionConfig`** — per-session behavior. Passed to `client.connect(sessionConfig)`. Holds `repo`, `model`, `maxIterations`, `systemPrompt`, `thinking`, `compaction`, and the restoration fields `initialTurns` / `lastCompactionSummary`.
 
-For model/provider selection and per-ask overrides, see [API keys and providers](/megasthenes/guides/api-keys-and-providers/).
+For model/provider selection and per-ask overrides, see [API Keys and Providers](/megasthenes/guides/api-keys-and-providers/).
 
 ### Connect Options (repo)
 
@@ -64,7 +64,7 @@ For the full event reference and consumption patterns (mixing iteration with `.r
 
 ### Per-turn overrides
 
-`ask(prompt, options)` accepts an `AskOptions` object for per-turn behavior. Model and thinking overrides are covered in [API keys and providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override). Other fields:
+`ask(prompt, options)` accepts an `AskOptions` object for per-turn behavior. Model and thinking overrides are covered in [API Keys and Providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override). Other fields:
 
 - `maxIterations` — override the iteration cap for this turn.
 - `afterTurn` — branch from a specific turn. See [Session Management — Conversation Branching](/megasthenes/guides/session-management/#conversation-branching).
@@ -192,7 +192,7 @@ await client.connect({
 | `effort` | `"minimal" \| "low" \| "medium" \| "high" \| "xhigh"` | Required for effort-based, optional for adaptive. |
 | `budgetOverrides` | `ThinkingBudgets` | Custom token budgets per level (effort-based only). |
 
-Thinking can also be overridden per `ask()` — see [API keys and providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override).
+Thinking can also be overridden per `ask()` — see [API Keys and Providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override).
 
 ### Context Compaction
 
