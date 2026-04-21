@@ -540,7 +540,7 @@ describe("sandbox git tool", () => {
 		expect(output).toContain("Author:");
 	});
 
-	test("git show reports a clear partial clone error when objects are missing", async () => {
+	test("git show --stat produces diff stats against a full clone", async () => {
 		if (!(await isSandboxRunning())) return;
 
 		const output = await client.executeTool(cloneResult.slug, cloneResult.sha, "git", {
@@ -548,19 +548,18 @@ describe("sandbox git tool", () => {
 			args: ["--stat", "-1"],
 		});
 
-		expect(output).toContain("needs objects omitted by partial clone");
-		expect(output).not.toContain("promisor remote");
+		expect(output).toContain("Author:");
+		expect(output).toMatch(/\d+ file.* changed/);
 	});
 
-	test("git blame reports a clear partial clone error when objects are missing", async () => {
+	test("git blame attributes lines against a full clone", async () => {
 		if (!(await isSandboxRunning())) return;
 
 		const output = await client.executeTool(cloneResult.slug, cloneResult.sha, "git", {
 			command: "blame",
 			args: ["README"],
 		});
-		expect(output).toContain("needs objects omitted by partial clone");
-		expect(output).not.toContain("promisor remote");
+		expect(output).toMatch(/\(.+\d{4}-\d{2}-\d{2}/);
 	});
 
 	test("git fetch is blocked", async () => {

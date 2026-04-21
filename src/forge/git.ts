@@ -99,7 +99,7 @@ export async function ensureCachedRepo(
 		await rm(cachePath, { recursive: true, force: true });
 	}
 	await mkdir(cachePath, { recursive: true });
-	const proc = Bun.spawn(["git", "clone", "--bare", "--filter=blob:none", buildCloneUrl(), cachePath], {
+	const proc = Bun.spawn(["git", "clone", "--bare", buildCloneUrl(), cachePath], {
 		stdout: "inherit",
 		stderr: "inherit",
 	});

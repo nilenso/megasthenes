@@ -79,7 +79,7 @@ This span is where local clone/fetch/worktree work or sandbox clone work is reco
 Local child span covering:
 - cache hit / cache reuse
 - `git fetch` when the requested commitish is missing locally
-- fresh `git clone --bare --filter=blob:none`
+- fresh `git clone --bare`
 
 ### `repo.resolve_commitish`
 

@@ -94,7 +94,6 @@ function recordCachePhaseOutcome(span: Span | undefined, cachePath: string, resu
 	endChildSpan(span, {
 		...base,
 		"megasthenes.git.operation": "clone",
-		"megasthenes.git.clone.filter": "blob:none",
 	});
 }
 
