@@ -591,7 +591,13 @@ export class Session {
 
 		const compactionSpan = startCompactionSpan(askSpan);
 		try {
-			const result = await maybeCompact(turnModel, messagesWithQuestion, this.#compactionSummary);
+			const result = await maybeCompact(
+				turnModel,
+				messagesWithQuestion,
+				this.#compactionSummary,
+				undefined,
+				this.#config.compaction,
+			);
 			if (result.wasCompacted) {
 				this.#context.messages = result.messages;
 				this.#compactionSummary = result.summary;

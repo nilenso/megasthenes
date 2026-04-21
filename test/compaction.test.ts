@@ -446,6 +446,37 @@ describe("maybeCompact", () => {
 
 		expect(result.summary).toBe(previousSummary);
 	});
+
+	// Regression for issue #120: caller-provided settings were being silently
+	// dropped because maybeCompact re-read module-level defaults.
+	test("honors caller-provided settings.enabled=false on an otherwise-compactable conversation", async () => {
+		const messages = makeLargeConversation(200, 4000);
+
+		const result = await maybeCompact(mockModel, messages, undefined, undefined, { enabled: false });
+
+		expect(result.wasCompacted).toBe(false);
+		expect(result.messages).toBe(messages);
+	});
+
+	test("honors caller-provided contextWindow override to trigger compaction below the default threshold", async () => {
+		// Small conversation — nowhere near the 200k default window, so default behavior would skip.
+		const messages = makeLargeConversation(30, 200);
+		const tokens = estimateContextTokens(messages);
+
+		// Sanity: with defaults, this would not compact.
+		const baseline = await maybeCompact(mockModel, messages);
+		expect(baseline.wasCompacted).toBe(false);
+
+		// Shrink the window so the same conversation must compact.
+		// shouldCompact triggers when contextTokens > contextWindow - reserveTokens.
+		const tiny = await maybeCompact(mockModel, messages, undefined, undefined, {
+			contextWindow: Math.floor(tokens / 2),
+			reserveTokens: 0,
+			keepRecentTokens: 100,
+		});
+
+		expect(tiny.wasCompacted).toBe(true);
+	});
 });
 
 describe("summarizer failure during compaction", () => {

@@ -619,8 +619,8 @@ async function compactWithTokenIndex(
 	previousSummary: string | undefined,
 	signal: AbortSignal | undefined,
 	tokenIndex: TokenEstimateIndex,
+	settings: CompactionSettings,
 ): Promise<CompactionResult> {
-	const settings = getCompactionSettings();
 	const tokensBefore = tokenIndex.total;
 	const cutPoint = findCutPointFromIndex(messages, settings, tokenIndex);
 
@@ -693,8 +693,10 @@ export async function compact(
 	messages: Message[],
 	previousSummary?: string,
 	signal?: AbortSignal,
+	settings?: Partial<CompactionSettings>,
 ): Promise<CompactionResult> {
-	return compactWithTokenIndex(model, messages, previousSummary, signal, buildTokenEstimateIndex(messages));
+	const resolved = { ...COMPACTION_SETTINGS, ...settings };
+	return compactWithTokenIndex(model, messages, previousSummary, signal, buildTokenEstimateIndex(messages), resolved);
 }
 
 export interface MaybeCompactResult {
@@ -718,12 +720,13 @@ export async function maybeCompact(
 	messages: Message[],
 	previousSummary?: string,
 	signal?: AbortSignal,
+	settings?: Partial<CompactionSettings>,
 ): Promise<MaybeCompactResult> {
-	const settings = getCompactionSettings();
+	const resolved: CompactionSettings = { ...COMPACTION_SETTINGS, ...settings };
 	const tokenIndex = buildTokenEstimateIndex(messages);
 	const contextTokens = tokenIndex.total;
 
-	if (!shouldCompact(contextTokens, settings)) {
+	if (!shouldCompact(contextTokens, resolved)) {
 		return {
 			messages,
 			summary: previousSummary,
@@ -736,7 +739,7 @@ export async function maybeCompact(
 		};
 	}
 
-	const result = await compactWithTokenIndex(model, messages, previousSummary, signal, tokenIndex);
+	const result = await compactWithTokenIndex(model, messages, previousSummary, signal, tokenIndex, resolved);
 	const compactedMessages = [createSummaryWrapperMessage(result.summary), ...result.keptMessages];
 
 	return {
