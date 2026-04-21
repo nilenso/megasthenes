@@ -23,6 +23,10 @@ Megasthenes allows you to programmatically ask questions to a GitHub/GitLab repo
 - 📡 **OpenTelemetry observability**: Built-in tracing with GenAI semantic conventions — send spans to Langfuse, Jaeger, or any OTel-compatible backend. Zero overhead when no SDK is installed.
 - 🧪 **Built-in evaluation system**: Measure and track answer quality over time using an LLM judge that scores responses on completeness, evidence, sourcing, and reasoning.
 
+## Documentation
+
+Full documentation is available at [nilenso.github.io/megasthenes](https://nilenso.github.io/megasthenes/) — configuration, sandboxing, observability, error handling, and the API reference.
+
 ## Requirements
 
 - [Bun](https://bun.sh/) (or Node.js ≥ 18)
