@@ -592,4 +592,26 @@ describe("Session compaction integration", () => {
 
 		expect(events.find((e) => e.type === "compaction")).toBeDefined();
 	});
+
+	test("config.compaction.enabled=false suppresses compaction even when the threshold is crossed", async () => {
+		// Same threshold-crushing settings as the trigger-compaction test above —
+		// if `enabled: false` weren't threaded through, this would compact.
+		const session = new Session(createMockRepo(), {
+			model: {} as Model<Api>,
+			systemPrompt: "You are a test assistant",
+			tools: [],
+			maxIterations: 5,
+			executeTool: async () => "mock",
+			logger: nullLogger,
+			stream: createSessionMockStream(),
+			compaction: { enabled: false, contextWindow: 0, reserveTokens: 0, keepRecentTokens: 1 },
+		});
+
+		const events: StreamEvent[] = [];
+		for await (const ev of session.ask("anything")) {
+			events.push(ev);
+		}
+
+		expect(events.find((e) => e.type === "compaction")).toBeUndefined();
+	});
 });

@@ -196,7 +196,32 @@ Thinking can also be overridden per `ask()` — see [API Keys and Providers](/me
 
 ### Context Compaction
 
-When conversations grow long, megasthenes automatically summarizes older messages to stay within the model's context window. Compaction is enabled by default.
+When conversations grow long, megasthenes automatically summarizes older messages to stay within the model's context window. Compaction is enabled by default — set `compaction: { enabled: false }` to opt out, or override individual fields to tune when it fires. Any fields you leave unset fall back to the defaults shown below.
+
+```ts
+// Opt out entirely
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
+  compaction: { enabled: false },
+});
+
+// Tune the thresholds (e.g. for a 1M-context model)
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
+  compaction: {
+    enabled: true,              // default: true
+    contextWindow: 1_000_000,   // default: 200_000 — total usable context
+    reserveTokens: 16_384,      // default: 16_384 — tokens held back for the response
+    keepRecentTokens: 20_000,   // default: 20_000 — recent messages kept unsummarized
+  },
+});
+```
+
+Compaction fires when estimated context tokens exceed `contextWindow - reserveTokens`. The most recent messages totalling roughly `keepRecentTokens` are retained verbatim; everything before that is replaced with an LLM-generated summary. See the [`compaction` event in Handling Responses](/megasthenes/guides/handling-responses/) for how to observe it at runtime.
 
 ### Tracing
 

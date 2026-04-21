@@ -85,8 +85,14 @@ export interface SessionConfig {
 	maxIterations: number;
 	/** Thinking/reasoning configuration. If omitted, thinking is off. */
 	thinking?: ThinkingConfig;
-	/** Context compaction settings. If omitted, compaction is off. */
-	compaction?: CompactionSettings;
+	/**
+	 * Context compaction settings. Compaction is on by default — pass
+	 * `{ enabled: false }` to opt out, or override individual fields
+	 * (`contextWindow`, `reserveTokens`, `keepRecentTokens`) to tune when
+	 * compaction fires. Unset fields fall back to built-in defaults
+	 * (200K context window, 16K reserve, 20K recent-keep).
+	 */
+	compaction?: Partial<CompactionSettings>;
 	/** Prior turns to seed the session with. Restores LLM context from previous conversation. */
 	initialTurns?: TurnResult[];
 	/** Last compaction summary from a prior session. Required for compaction continuity when restoring with initialTurns. */
