@@ -28,7 +28,7 @@ const session = await client.connect({
 });
 ```
 
-If the matching env var for your chosen provider isn't set, `connect()` or the first `ask()` throws. See [Error Handling](/megasthenes/guides/error-handling/) to classify by `errorType`.
+If the matching env var for your chosen provider isn't set, `connect()` or the first `ask()` throws. See [Handling Errors](/megasthenes/guides/error-handling/) to classify by `errorType`.
 
 ### Per-ask override
 

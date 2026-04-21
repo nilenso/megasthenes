@@ -81,7 +81,7 @@ const result = await stream.result();
 |---|---|
 | `iteration_start` | Marks the start of each LLM inference iteration (zero-based `index`). |
 | `compaction` | Context was compacted. Carries `summary`, `tokensBefore`, `tokensAfter`. |
-| `error` | Unrecoverable error during the turn. See [Error Handling](/megasthenes/guides/error-handling/). |
+| `error` | Unrecoverable error during the turn. See [Handling Errors](/megasthenes/guides/error-handling/). |
 
 ### TurnResult Structure
 

@@ -101,8 +101,9 @@ Verify the sandbox is running:
 
 ```bash
 curl http://localhost:8080/health
-# Expected: {"ok":true}
 ```
+
+You should see `{"ok":true}` in the response.
 
 ### Authentication
 

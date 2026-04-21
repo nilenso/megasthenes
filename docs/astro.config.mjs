@@ -1,6 +1,7 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
+import { shellCommentMarker } from "./ec-plugins/shell-comment-marker.mjs";
 
 export default defineConfig({
 	site: "https://nilenso.github.io",
@@ -9,6 +10,9 @@ export default defineConfig({
 		starlight({
 			title: "megasthenes",
 			customCss: ["./src/styles/custom.css"],
+			expressiveCode: {
+				plugins: [shellCommentMarker()],
+			},
 			social: [
 				{
 					icon: "github",

@@ -254,16 +254,27 @@ const sdk = new NodeSDK({ traceExporter: new ConsoleSpanExporter() });
 sdk.start();
 ```
 
-#### Langfuse
+#### Integrating with an observability platform
+
+Most LLM observability platforms (Arize Phoenix, Langfuse, Honeycomb, Jaeger) accept OTLP, so any OTLP exporter will work. The example below ships traces to a local [Arize Phoenix](https://phoenix.arize.com/) instance:
 
 ```ts
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 
 const sdk = new NodeSDK({
-  spanProcessors: [new LangfuseSpanProcessor()],
+  spanProcessors: [
+    new BatchSpanProcessor(
+      new OTLPTraceExporter({
+        url: "http://localhost:6006/v1/traces",
+      }),
+    ),
+  ],
 });
 sdk.start();
 ```
+
+Phoenix reads the [OpenInference](https://github.com/Arize-ai/openinference) semantic conventions, while megasthenes emits OTel GenAI spans. Traces will arrive with the basic export above, but Phoenix's built-in token-count, cost, and input/output panels stay empty until you map between the two. See [`scripts/ask-with-phoenix.ts`](https://github.com/nilenso/megasthenes/blob/main/scripts/ask-with-phoenix.ts) for a worked `SpanProcessor` that enriches spans with the OpenInference attributes Phoenix expects.
 
 See the [Observability guide](/megasthenes/guides/observability/) for the full span hierarchy, emitted attributes/events, and structured error tracing.

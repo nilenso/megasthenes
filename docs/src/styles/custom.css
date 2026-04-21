@@ -129,3 +129,20 @@
 .site-title > span {
 	display: none;
 }
+
+/* Shell prompt prefix rendered via ::before so the prompt isn't part of
+   textContent — Expressive Code's copy button skips it, and manual
+   selection can't grab it either. The :has(> *) guard excludes empty
+   source lines (which contain only a "\n" text node). The
+   .is-shell-comment class is added by the shell-comment-marker EC plugin
+   to lines whose source starts with "#", so comments render un-prompted. */
+pre[data-language="bash"] .ec-line:not(.is-shell-comment) > .code:has(> *)::before,
+pre[data-language="sh"] .ec-line:not(.is-shell-comment) > .code:has(> *)::before,
+pre[data-language="shell"] .ec-line:not(.is-shell-comment) > .code:has(> *)::before,
+pre[data-language="shellsession"] .ec-line:not(.is-shell-comment) > .code:has(> *)::before,
+pre[data-language="zsh"] .ec-line:not(.is-shell-comment) > .code:has(> *)::before {
+	content: "$ ";
+	color: var(--sl-color-gray-3);
+	user-select: none;
+	-webkit-user-select: none;
+}

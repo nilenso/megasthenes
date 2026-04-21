@@ -1,5 +1,5 @@
 ---
-title: Error Handling
+title: Handling Errors
 description: Handle structured errors from stream events and thrown exceptions.
 sidebar:
   order: 5
@@ -12,7 +12,7 @@ megasthenes surfaces errors in two ways:
 
 Both carry a typed `errorType` field for programmatic handling.
 
-### ErrorType
+### Error Types
 
 All errors include one of these types:
 
