@@ -43,8 +43,8 @@ await session.ask("Summarize the architecture.", {
 
 `maxIterations` and `thinking` can be overridden on a single `ask()` the same way — see [`AskOptions`][askopts].
 
-[pi-ai]: https://github.com/badlogic/pi-mono/tree/main/packages/pi-ai
-[models]: https://github.com/badlogic/pi-mono/blob/main/packages/pi-ai/src/models.generated.ts
-[pi-env]: https://github.com/badlogic/pi-mono/tree/main/packages/pi-ai#environment-variables-nodejs-only
-[pi-oauth]: https://github.com/badlogic/pi-mono/tree/main/packages/pi-ai#oauth-providers
+[pi-ai]: https://github.com/badlogic/pi-mono/tree/main/packages/ai
+[models]: https://github.com/badlogic/pi-mono/blob/main/packages/ai/src/models.generated.ts
+[pi-env]: https://github.com/badlogic/pi-mono/tree/main/packages/ai#environment-variables-nodejs-only
+[pi-oauth]: https://github.com/badlogic/pi-mono/tree/main/packages/ai#oauth-providers
 [askopts]: /megasthenes/api/interfaces/askoptions/
