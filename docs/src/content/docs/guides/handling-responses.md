@@ -147,5 +147,5 @@ for await (const event of stream) {
 
 - **Lazy start**: The stream does not begin until you consume it (iterate or call `.result()`).
 - **Single consumption**: A stream can only be iterated once. Attempting to iterate again throws `"AskStream is already being consumed"`.
-- **Serialized asks**: Concurrent `ask()` calls on the same session are serialized — each waits for the previous to complete.
+- **Serialized asks**: Concurrent `ask()` calls on the same session are serialized — each waits for the previous to complete. Because streams are also lazy, an `AskStream` you create but never consume will block every subsequent `ask()` on the session indefinitely. Always iterate or `await .result()` on every stream you create — even if you only want to discard it (`await session.ask("...").result().catch(() => {})`). If you need true parallelism, use separate sessions.
 - **Cacheable result**: `.result()` can be called multiple times — subsequent calls return the cached `TurnResult`.
