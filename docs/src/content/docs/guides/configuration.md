@@ -1,67 +1,88 @@
 ---
 title: Configuration
-description: Configure the model provider, system prompt, sandbox, and other settings.
+description: Configure sessions — connect options, system prompt, logging, sandbox, thinking, compaction, and tracing.
 sidebar:
-  order: 2
+  order: 3
 ---
 
-### Connect Options
+Megasthenes has two layers of configuration:
 
-The `connect()` method accepts git-related options:
+- **`ClientConfig`** — shared infrastructure. Passed to `new Client(clientConfig)`. Holds `sandbox` and `logger`.
+- **`SessionConfig`** — per-session behavior. Passed to `client.connect(sessionConfig)`. Holds `repo`, `model`, `maxIterations`, `systemPrompt`, `thinking`, `compaction`, and the restoration fields `initialTurns` / `lastCompactionSummary`.
+
+For model/provider selection and per-ask overrides, see [API keys and providers](/megasthenes/guides/api-keys-and-providers/).
+
+### Connect Options (repo)
+
+`connect()` takes a `SessionConfig` object. The `repo` field controls how the repository is fetched:
 
 ```ts
 // Connect to a specific commit, branch, or tag
-const session = await client.connect("https://github.com/owner/repo", {
-  commitish: "v1.0.0",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo", commitish: "v1.0.0" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
 });
 
 // Connect to a private repository with a token
-const session = await client.connect("https://github.com/owner/repo", {
-  token: process.env.GITHUB_TOKEN,
+await client.connect({
+  repo: {
+    url: "https://github.com/owner/repo",
+    token: process.env.GITHUB_TOKEN,
+  },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
 });
 
 // Explicitly specify the forge (auto-detected for github.com and gitlab.com)
-const session = await client.connect("https://gitlab.example.com/owner/repo", {
-  forge: "gitlab",
-  token: process.env.GITLAB_TOKEN,
+await client.connect({
+  repo: {
+    url: "https://gitlab.example.com/owner/repo",
+    forge: "gitlab",
+    token: process.env.GITLAB_TOKEN,
+  },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
 });
 ```
 
-### Model and Provider
+### Consuming `ask()` results
 
-The `Client` accepts a `ForgeConfig` object that controls the AI model and behavior.
-
-By default, the client uses **OpenRouter** with **`anthropic/claude-sonnet-4.6`**. You can override both `provider` and `model` (they must be specified together). The corresponding API key environment variable is resolved automatically (e.g. `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`).
-
-Available providers and model IDs are defined in [`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/blob/main/packages/pi-ai/src/models.generated.ts).
+`session.ask(prompt, options?)` returns an `AskStream` — an `AsyncIterable<StreamEvent>` that also exposes `.result()` for the reduced `TurnResult`. There is no `onProgress` callback; consume by iterating or awaiting the result:
 
 ```ts
-import { Client, type ForgeConfig } from "@nilenso/megasthenes";
+// Stream events as they arrive
+for await (const event of session.ask("What does this repo do?")) {
+  if (event.type === "text_delta") process.stdout.write(event.delta);
+}
 
-// Use defaults (openrouter + anthropic/claude-sonnet-4.6)
-const client = new Client();
-
-// Or specify a different provider/model
-const client = new Client({
-  provider: "anthropic",
-  model: "claude-sonnet-4.6",
-});
-
-// Full configuration
-const client = new Client({
-  provider: "openrouter",
-  model: "anthropic/claude-sonnet-4.6",
-  maxIterations: 10,                    // Optional: default is 20
-});
+// Or await the full reduced result
+const result = await session.ask("How are the tests structured?").result();
 ```
+
+For the full event reference and consumption patterns (mixing iteration with `.result()`, error events, tool events, compaction events), see the [Streaming guide](/megasthenes/guides/streaming/).
+
+### Per-turn overrides
+
+`ask(prompt, options)` accepts an `AskOptions` object for per-turn behavior. Model and thinking overrides are covered in [API keys and providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override). Other fields:
+
+- `maxIterations` — override the iteration cap for this turn.
+- `afterTurn` — branch from a specific turn. See [Session Management — Conversation Branching](/megasthenes/guides/session-management/#conversation-branching).
+- `signal` — an `AbortSignal` to cancel the turn mid-stream.
+
+See [`AskOptions`](/megasthenes/api/interfaces/askoptions/) for the full interface.
 
 ### System Prompt
 
-By default, megasthenes builds a system prompt that includes the repository URL and commit SHA. You can override it to customize the assistant's behavior:
+By default, megasthenes builds a system prompt that embeds the repository URL and commit SHA. Override it per session to customize behavior:
 
 ```ts
-const client = new Client({
-  systemPrompt: "You are a security auditor. Focus on identifying vulnerabilities, insecure patterns, and potential attack vectors in the codebase.",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
+  systemPrompt:
+    "You are a security auditor. Focus on identifying vulnerabilities, insecure patterns, and potential attack vectors.",
 });
 ```
 
@@ -71,14 +92,18 @@ You can also build the default prompt yourself and extend it:
 import { Client, buildDefaultSystemPrompt } from "@nilenso/megasthenes";
 
 const base = buildDefaultSystemPrompt("https://github.com/owner/repo", "abc123");
-const client = new Client({
+
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
   systemPrompt: `${base}\n\nAlways respond in Spanish.`,
 });
 ```
 
 ### Logging
 
-The second parameter to the constructor controls logging:
+The `logger` field on `ClientConfig` controls logging for all sessions opened by that client:
 
 ```ts
 import {
@@ -88,18 +113,18 @@ import {
   type Logger,
 } from "@nilenso/megasthenes";
 
-// Use console logger (default)
-const client = new Client(config, consoleLogger);
+// Default — consoleLogger
+const client = new Client();
 
 // Silence all logging
-const client = new Client(config, nullLogger);
+const client = new Client({ logger: nullLogger });
 
 // Custom logger
 const customLogger: Logger = {
   log: (label, content) => myLogSystem.info(`${label}: ${content}`),
   error: (label, error) => myLogSystem.error(label, error),
 };
-const client = new Client(config, customLogger);
+const client = new Client({ logger: customLogger });
 ```
 
 ### Sandboxing
@@ -122,42 +147,43 @@ See the [Sandboxed Execution guide](/megasthenes/guides/sandbox/) for security l
 
 ### Thinking
 
-Control the model's reasoning/thinking behavior via the `thinking` field. Megasthenes supports two modes:
+Control the model's reasoning behavior via the `thinking` field on `SessionConfig`. Megasthenes supports two modes:
 
-- **Effort-based** (cross-provider): Set an effort level that pi-ai maps to each provider's native format (`reasoning.effort` for OpenAI, `thinking` for Anthropic, etc.)
-- **Adaptive** (Anthropic 4.6 only): The model decides when and how much to think per request
+- **Effort-based** (cross-provider): Set an effort level that pi-ai maps to each provider's native format (`reasoning.effort` for OpenAI, `thinking` for Anthropic, etc.).
+- **Adaptive** (Anthropic 4.6 only): The model decides when and how much to think per request.
 
 ```ts
 // OpenAI — effort-based reasoning
-const client = new Client({
-  provider: "openai",
-  model: "o3",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "openai", id: "o3" },
+  maxIterations: 20,
   thinking: { effort: "low" },
 });
 
 // Anthropic 4.5 — effort-based (older model, no adaptive support)
-const client = new Client({
-  provider: "anthropic",
-  model: "claude-sonnet-4-5-20251022",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-5-20251022" },
+  maxIterations: 20,
   thinking: { effort: "high", budgetOverrides: { high: 10000 } },
 });
 
 // Anthropic 4.6 — adaptive (model decides when/how much to think)
-const client = new Client({
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
   thinking: { type: "adaptive" },
 });
 
 // Anthropic 4.6 — adaptive with explicit effort guidance
-const client = new Client({
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
+await client.connect({
+  repo: { url: "https://github.com/owner/repo" },
+  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
+  maxIterations: 20,
   thinking: { type: "adaptive", effort: "medium" },
 });
-
-// No thinking (default)
-const client = new Client();
 ```
 
 | Field | Type | Description |
@@ -166,20 +192,11 @@ const client = new Client();
 | `effort` | `"minimal" \| "low" \| "medium" \| "high" \| "xhigh"` | Required for effort-based, optional for adaptive. |
 | `budgetOverrides` | `ThinkingBudgets` | Custom token budgets per level (effort-based only). |
 
+Thinking can also be overridden per `ask()` — see [API keys and providers](/megasthenes/guides/api-keys-and-providers/#per-ask-override).
+
 ### Context Compaction
 
-When conversations grow long, megasthenes can automatically summarize older messages to stay within the model's context window. This is enabled by default.
-
-```ts
-const client = new Client({
-  compaction: {
-    enabled: true,            // default: true
-    contextWindow: 200_000,   // default: 200K tokens
-    reserveTokens: 16_384,    // tokens reserved for the response
-    keepRecentTokens: 20_000, // recent messages to keep unsummarized
-  },
-});
-```
+When conversations grow long, megasthenes automatically summarizes older messages to stay within the model's context window. Compaction is enabled by default.
 
 ### Tracing
 
@@ -225,22 +242,3 @@ sdk.start();
 ```
 
 See the [Observability guide](/megasthenes/guides/observability/) for the full span hierarchy, emitted attributes/events, and structured error tracing.
-
-### Streaming Progress
-
-Use the `onProgress` callback to receive real-time events during inference:
-
-```ts
-const result = await session.ask("Find all API endpoints", {
-  onProgress: (event) => {
-    switch (event.type) {
-      case "tool_call":
-        console.log(`Using tool: ${event.name}`);
-        break;
-      case "text_delta":
-        process.stdout.write(event.text);
-        break;
-    }
-  },
-});
-```

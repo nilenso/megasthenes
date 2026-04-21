@@ -52,31 +52,64 @@ const summary = session.getCompactionSummary();
 
 ### Session Restoration
 
-You can save and restore a session's state to continue a conversation across process restarts or different sessions:
+You can save and restore a session's state to continue a conversation across process restarts or different sessions.
+
+#### What to persist
+
+- **`session.getTurns()`** — the ordered history of completed turns (`TurnResult[]`).
+- **`session.getCompactionSummary()`** — the current compaction summary (`string | undefined`), if any turn triggered compaction.
+
+Both are JSON-serializable: `TurnResult` and `Step` contain only strings, numbers, booleans, plain objects, and arrays — no `Date` instances, class instances, or `Buffer`s. `JSON.stringify` / `JSON.parse` round-trips cleanly. The one field to watch is `TurnResult.error.details` (typed as `unknown`) — strip or sanitize it if the producer may emit non-serializable values like circular references.
+
+#### Saving
 
 ```ts
-// Save session state
-const turns = session.getTurns();
-const compactionSummary = session.getCompactionSummary();
+import { writeFile } from "node:fs/promises";
+
+const payload = {
+  version: 1,
+  repoUrl: session.repo.url,
+  commitish: session.repo.commitish,   // resolved commit SHA, not the requested ref
+  model: session.config.model,
+  turns: session.getTurns(),
+  lastCompactionSummary: session.getCompactionSummary(),
+};
+
+await writeFile("session.json", JSON.stringify(payload));
 await session.close();
-
-// ... persist turns and compactionSummary ...
-
-// Restore in a new session
-const newSession = await client.connect({
-  repo: { url: "https://github.com/owner/repo" },
-  model: { provider: "anthropic", id: "claude-sonnet-4-6" },
-  maxIterations: 20,
-  compaction: { enabled: true, contextWindow: 200_000 },
-  initialTurns: turns,
-  lastCompactionSummary: compactionSummary,
-});
-
-// The conversation continues with full context
-await newSession.ask("Based on our earlier discussion, what else should I know?").result();
 ```
 
-The `initialTurns` field seeds the session with prior turn results, and `lastCompactionSummary` provides the compaction state so that context compression can continue seamlessly.
+#### Restoring
+
+```ts
+import { readFile } from "node:fs/promises";
+
+const raw = JSON.parse(await readFile("session.json", "utf8"));
+if (raw.version !== 1) {
+  throw new Error(`Unsupported session payload version: ${raw.version}`);
+}
+
+const session = await client.connect({
+  repo: { url: raw.repoUrl, commitish: raw.commitish },
+  model: raw.model,
+  maxIterations: 20,
+  initialTurns: raw.turns,
+  lastCompactionSummary: raw.lastCompactionSummary,
+});
+
+await session.ask("Based on our earlier discussion, what else should I know?").result();
+```
+
+`initialTurns` seeds the session with prior turn results; `lastCompactionSummary` provides the compaction state so context compression continues seamlessly. If compaction ran in the original session, pass `lastCompactionSummary` too — dropping it discards pre-compaction context that the saved turns implicitly reference.
+
+#### Schema versioning
+
+`TurnResult` and `Step` are part of the public API but can evolve across megasthenes releases. Tag every persisted payload with an explicit `version` (as shown above) and fail loudly when the loader sees an unfamiliar version — don't feed an unknown shape into `initialTurns`. When you bump your own `version`, write a small migration that upgrades old payloads to the new shape rather than discarding them.
+
+#### What to match on restore
+
+- **`repo.url` and `repo.commitish`** should match the original session. Saved turns reference file paths and line numbers at a specific commit; restoring against a different commit can make the model reason from stale coordinates.
+- **`model`** can differ — you're free to restore with a different provider/model — but the restored model picks up the conversation blind. Switching to a model with a smaller context window or weaker tool-use may degrade answers.
 
 ### Conversation Branching
 
