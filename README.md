@@ -47,7 +47,7 @@ npx jsr add @nilenso/megasthenes
 
 For Docker or manual setup, add to `package.json`:
 ```json
-"@nilenso/megasthenes": "npm:@jsr/nilenso__megasthenes@0.0.19"
+"@nilenso/megasthenes": "npm:@jsr/nilenso__megasthenes@0.1.0"
 ```
 
 And create `.npmrc`:
