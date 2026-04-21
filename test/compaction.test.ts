@@ -452,35 +452,39 @@ describe("summarizer failure during compaction", () => {
 	// Each test flips summarizerBehavior and must reset it to avoid poisoning
 	// other suites that share this module-level mock.
 	test("compact() rejects with the summarizer's error when the LLM throws", async () => {
-		summarizerBehavior = { throws: new Error("summarizer boom") };
+		const sentinel = new Error("sentinel: summarizer");
+		summarizerBehavior = { throws: sentinel };
 		try {
 			const messages = makeLargeConversation(200, 4000);
-			await expect(compact(mockModel, messages)).rejects.toThrow("summarizer boom");
+			// Identity check: the same error object thrown by the summarizer
+			// round-trips out through compact().
+			await expect(compact(mockModel, messages)).rejects.toBe(sentinel);
 		} finally {
 			resetSummarizer();
 		}
 	});
 
 	test("maybeCompact() rejects and does NOT fall back to a silent no-op result", async () => {
-		summarizerBehavior = { throws: new Error("summarizer boom") };
+		const sentinel = new Error("sentinel: summarizer");
+		summarizerBehavior = { throws: sentinel };
 		try {
 			const messages = makeLargeConversation(200, 4000);
 			// Must reject rather than silently returning { wasCompacted: false, messages } —
 			// callers need to distinguish "nothing to compact" (normal) from "compaction
 			// attempted and failed". The session layer treats these very differently.
-			await expect(maybeCompact(mockModel, messages)).rejects.toThrow("summarizer boom");
+			await expect(maybeCompact(mockModel, messages)).rejects.toBe(sentinel);
 		} finally {
 			resetSummarizer();
 		}
 	});
 
 	test("failed compaction leaves inputs untouched (no partial state leaks out)", async () => {
-		summarizerBehavior = { throws: new Error("summarizer boom") };
+		summarizerBehavior = { throws: new Error("sentinel: summarizer") };
 		try {
 			const messages = makeLargeConversation(200, 4000);
 			const snapshot = [...messages];
 
-			await expect(compact(mockModel, messages)).rejects.toThrow();
+			await expect(compact(mockModel, messages)).rejects.toBeInstanceOf(Error);
 
 			// Compaction must not mutate the caller's message array on failure —
 			// the session layer keeps a reference and reuses it after swallowing
@@ -493,9 +497,9 @@ describe("summarizer failure during compaction", () => {
 	});
 
 	test("subsequent compact() calls succeed after the summarizer recovers", async () => {
-		summarizerBehavior = { throws: new Error("summarizer boom") };
+		summarizerBehavior = { throws: new Error("sentinel: summarizer") };
 		const messages = makeLargeConversation(200, 4000);
-		await expect(compact(mockModel, messages)).rejects.toThrow();
+		await expect(compact(mockModel, messages)).rejects.toBeInstanceOf(Error);
 
 		resetSummarizer();
 		const recoveredResult = await compact(mockModel, messages);

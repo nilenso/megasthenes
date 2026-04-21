@@ -225,22 +225,26 @@ describe("AskStream", () => {
 
 	describe("producer throws", () => {
 		test("producer throws before any yield — .result() rejects with the producer's error", async () => {
+			const sentinel = new Error("sentinel: producer pre-yield");
 			const producer = async function* (): AsyncGenerator<StreamEvent> {
 				// Touch `yield` after the throw so TypeScript still treats this as
 				// a generator, but Biome doesn't flag an unreachable statement.
 				if ((0 as number) === 1) yield { type: "text", text: "unreachable" };
-				throw new Error("producer exploded");
+				throw sentinel;
 			};
 			const stream = new AskStreamImpl(producer);
 
-			await expect(stream.result()).rejects.toThrow("producer exploded");
+			// Identity check (not message-text check): the same error object
+			// round-trips out through .result().
+			await expect(stream.result()).rejects.toBe(sentinel);
 		});
 
 		test("producer throws mid-stream while iterating — iterator rethrows and iteration terminates", async () => {
+			const sentinel = new Error("sentinel: mid-stream");
 			const producer = async function* (): AsyncGenerator<StreamEvent> {
 				yield { type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 };
 				yield { type: "text_delta", delta: "partial" };
-				throw new Error("mid-stream failure");
+				throw sentinel;
 			};
 			const stream = new AskStreamImpl(producer);
 
@@ -254,17 +258,17 @@ describe("AskStream", () => {
 				caught = error;
 			}
 
-			expect(caught).toBeInstanceOf(Error);
-			expect((caught as Error).message).toBe("mid-stream failure");
+			expect(caught).toBe(sentinel);
 			// Events observed before the throw are still delivered in order.
 			expect(collected.map((e) => e.type)).toEqual(["turn_start", "text_delta"]);
 		});
 
 		test("after iteration throws, .result() resolves with the partial TurnResult built so far", async () => {
+			const sentinel = new Error("sentinel: mid-stream");
 			const producer = async function* (): AsyncGenerator<StreamEvent> {
 				yield { type: "turn_start", turnId: "t-1", prompt: "Q", timestamp: 1000 };
 				yield { type: "text", text: "partial answer" };
-				throw new Error("mid-stream failure");
+				throw sentinel;
 			};
 			const stream = new AskStreamImpl(producer);
 
