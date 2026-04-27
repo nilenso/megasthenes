@@ -7,8 +7,7 @@
 		"lint": "biome lint .",
 		"check": "biome check --write .",
 		"test": "bun test",
-		"web": "bun run web/server.ts",
-		"postinstall": "patch -p0 -N -d node_modules/@mariozechner/pi-ai < patches/pi-ai-output-config.patch || true"
+		"web": "bun run web/server.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.12",
